@@ -42,3 +42,5 @@ The most relevant security and privacy risks are:
 - publication of a package artifact that differs from reviewed source.
 
 Release checks therefore include hit testing, modal stacking, scoped teardown, persistence validation, bundle execution, and packed-artifact inspection. See [docs/testing.md](docs/testing.md).
+
+Publication is currently manual. CI verifies an uploadable tarball, but the repository does not claim that a later npm publication is provenance-attested or cryptographically identical until a trusted-publishing workflow is introduced.

@@ -104,4 +104,22 @@ describe('layout geometry', () => {
     expect(resized.x + resized.width).toBe(origin.x + origin.width)
     expect(resized.y + resized.height).toBe(origin.y + origin.height)
   })
+
+  it('releases an incompatible anchor without moving the opposite resize edge', () => {
+    const rightAnchored = { mode: 'floating' as const, x: 592, y: 200, width: 500, height: 160, anchor: 'right' as const }
+    const resizedEast = resizeFloating(rightAnchored, 'se', -100, 0, bounds, 40)
+    expect(resizedEast).toEqual({ mode: 'floating', x: 592, y: 200, width: 400, height: 160 })
+
+    const leftAnchored = { mode: 'floating' as const, x: 108, y: 200, width: 500, height: 160, anchor: 'left' as const }
+    const resizedWest = resizeFloating(leftAnchored, 'nw', 100, 0, bounds, 40)
+    expect(resizedWest).toEqual({ mode: 'floating', x: 208, y: 200, width: 400, height: 160 })
+  })
+
+  it('preserves a matching anchor and stops growth at the active boundary', () => {
+    const rightAnchored = { mode: 'floating' as const, x: 592, y: 200, width: 500, height: 160, anchor: 'right' as const }
+    expect(resizeFloating(rightAnchored, 'nw', 100, 0, bounds, 40)).toEqual({
+      mode: 'floating', x: 692, y: 200, width: 400, height: 160, anchor: 'right',
+    })
+    expect(resizeFloating(rightAnchored, 'se', 100, 0, bounds, 40)).toEqual(rightAnchored)
+  })
 })

@@ -165,6 +165,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   document.body.replaceChildren()
+  document.body.removeAttribute('style')
   document.documentElement.className = ''
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
@@ -215,6 +216,25 @@ describe('InputAnywhereControls integration', () => {
 
     view.unmount()
     expect(fixture.trailing.hasAttribute('data-input-anywhere-trailing')).toBe(false)
+  })
+
+  it('re-clamps the complete seat when a dock panel appears after floating', async () => {
+    const fixture = createFixture()
+    const view = render(<InputAnywhereControls />, { container: fixture.mount })
+    fireEvent.click(view.getByRole('button', { name: 'Move input' }))
+    expect(fixture.seat.style.getPropertyValue('--dsh-input-anywhere-y')).toBe('580px')
+
+    const queuePanel = document.createElement('section')
+    queuePanel.dataset.queueDock = ''
+    fixture.seat.insertBefore(queuePanel, fixture.card)
+    setRect(queuePanel, rect(100, 580, 800, 100))
+    setRect(fixture.seat, rect(100, 480, 800, 280))
+    act(() => { ResizeObserverStub.trigger(fixture.seat) })
+
+    await waitFor(() => {
+      expect(fixture.seat.style.getPropertyValue('--dsh-input-anywhere-y')).toBe('512px')
+      expect(fixture.seat.contains(queuePanel)).toBe(true)
+    })
   })
 
   it('observes extension rows added and resized after floating', async () => {
@@ -294,6 +314,25 @@ describe('InputAnywhereControls integration', () => {
     view.unmount()
   })
 
+  it('releases pointer capture when the component unmounts during a drag', () => {
+    const fixture = createFixture()
+    const view = render(<InputAnywhereControls />, { container: fixture.mount })
+    const move = view.getByRole('button', { name: 'Move input' })
+    const releasePointerCapture = vi.mocked(HTMLElement.prototype.releasePointerCapture)
+
+    fireEvent.pointerDown(move, {
+      button: 0,
+      isPrimary: true,
+      pointerId: 12,
+      clientX: 240,
+      clientY: 700,
+    })
+    view.unmount()
+
+    expect(releasePointerCapture).toHaveBeenCalledWith(12)
+    expect(document.documentElement.classList.contains('dsh-input-anywhere-interacting')).toBe(false)
+  })
+
   it('commits an animation-frame-pending pointer layout on pagehide', () => {
     const fixture = createFixture()
     const view = render(<InputAnywhereControls />, { container: fixture.mount })
@@ -350,6 +389,28 @@ describe('InputAnywhereControls integration', () => {
     })
   })
 
+  it('rebinds when composer markers are added to existing ancestors', async () => {
+    const fixture = createFixture()
+    fixture.root.removeAttribute('data-phase')
+    fixture.scroller.removeAttribute('data-conversation-scroll')
+    fixture.seat.removeAttribute('data-composer-seat')
+    fixture.card.removeAttribute('data-composer-card')
+    const view = render(<InputAnywhereControls />, { container: fixture.mount })
+
+    act(() => {
+      fixture.root.dataset.phase = 'active'
+      fixture.scroller.dataset.conversationScroll = ''
+      fixture.seat.dataset.composerSeat = ''
+      fixture.card.dataset.composerCard = ''
+    })
+
+    await waitFor(() => {
+      expect(fixture.seat.classList.contains('dsh-input-anywhere-seat')).toBe(true)
+      expect(fixture.trailing.hasAttribute('data-input-anywhere-trailing')).toBe(true)
+    })
+    view.unmount()
+  })
+
   it('recovers when composer markers appear after the control mounts', async () => {
     const isolated = document.createElement('div')
     document.body.append(isolated)
@@ -377,6 +438,50 @@ describe('InputAnywhereControls integration', () => {
 
     expect(fixture.seat.hasAttribute('data-input-anywhere-floating')).toBe(false)
     expect(view.getByRole('button', { name: 'Move input' }).getAttribute('aria-pressed')).toBe('false')
+  })
+
+  it('tracks translucent surface tokens changed by an ancestor appearance extension', async () => {
+    const fixture = createFixture()
+    fixture.root.style.setProperty('--dsw-alias-bg-layer-1', '#112233')
+    const view = render(<InputAnywhereControls />, { container: fixture.mount })
+    fireEvent.click(view.getByRole('button', { name: 'Move input' }))
+
+    expect(fixture.seat.style.getPropertyValue('--dsh-input-anywhere-surface')).toBe('')
+
+    act(() => {
+      fixture.root.style.setProperty('--dsw-alias-bg-layer-1', 'hsla(220, 20%, 20%, 0.42)')
+      fixture.root.style.setProperty('--dsw-alias-bg-layer-2', 'hsla(220, 20%, 24%, 0.48)')
+    })
+    await waitFor(() => {
+      expect(fixture.seat.style.getPropertyValue('--dsh-input-anywhere-surface'))
+        .toBe('var(--dsw-alias-bg-layer-1)')
+      expect(fixture.seat.style.getPropertyValue('--dsh-input-anywhere-menu-surface'))
+        .toBe('var(--dsw-alias-bg-layer-2)')
+      expect(fixture.seat.hasAttribute('data-input-anywhere-themed')).toBe(true)
+    })
+
+    act(() => {
+      fixture.root.style.setProperty('--dsw-alias-bg-layer-1', 'hsl(220, 20%, 20%)')
+    })
+    await waitFor(() => {
+      expect(fixture.seat.style.getPropertyValue('--dsh-input-anywhere-surface')).toBe('')
+      expect(fixture.seat.style.getPropertyValue('--dsh-input-anywhere-menu-surface')).toBe('')
+      expect(fixture.seat.hasAttribute('data-input-anywhere-themed')).toBe(false)
+    })
+  })
+
+  it('returns to native docking when an appearance extension adds a fixed containing block', async () => {
+    const fixture = createFixture()
+    const view = render(<InputAnywhereControls />, { container: fixture.mount })
+    fireEvent.click(view.getByRole('button', { name: 'Move input' }))
+    expect(fixture.seat.hasAttribute('data-input-anywhere-floating')).toBe(true)
+
+    act(() => { fixture.root.style.backdropFilter = 'blur(8px)' })
+
+    await waitFor(() => {
+      expect(fixture.seat.hasAttribute('data-input-anywhere-floating')).toBe(false)
+      expect(view.getByRole('button', { name: 'Move input' }).getAttribute('aria-pressed')).toBe('false')
+    })
   })
 
   it('tolerates unavailable local storage during interaction and teardown', () => {

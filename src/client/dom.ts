@@ -57,11 +57,14 @@ export function visibleBounds(
   }
   const left = Math.max(rootRect.left, viewportLeft)
   const top = Math.max(rootRect.top, viewportTop)
-  const right = Math.max(left + 1, Math.min(rootRect.right, viewportRight))
-  const bottom = Math.max(top + 1, Math.min(rootRect.bottom, viewportBottom))
-  const rootBounds = { left, top, right, bottom, width: right - left, height: bottom - top }
-  const usableMinimum = Math.min(MIN_WIDTH + EDGE_MARGIN * 2, viewportBounds.width)
-  return rootBounds.width < usableMinimum ? viewportBounds : rootBounds
+  const right = Math.min(rootRect.right, viewportRight)
+  const bottom = Math.min(rootRect.bottom, viewportBottom)
+  const rootBounds = { left, top, right, bottom, width: Math.max(0, right - left), height: Math.max(0, bottom - top) }
+  const usableMinimumWidth = Math.min(MIN_WIDTH + EDGE_MARGIN * 2, viewportBounds.width)
+  const usableMinimumHeight = Math.min(MIN_CARD_HEIGHT + EDGE_MARGIN * 2, viewportBounds.height)
+  return rootBounds.width < usableMinimumWidth || rootBounds.height < usableMinimumHeight
+    ? viewportBounds
+    : rootBounds
 }
 
 export function extraHeight(targets: ComposerTargets): number {
@@ -119,14 +122,104 @@ export function minimumCardHeight(targets: ComposerTargets): number {
   return Math.max(MIN_CARD_HEIGHT, Math.ceil(fixedHeight + chrome + 48))
 }
 
+const APPEARANCE_SURFACE_TOKENS = [
+  '--dsw-alias-bg-layer-1',
+  '--dsw-alias-bg-base',
+] as const
+
+const APPEARANCE_MENU_SURFACE_TOKENS = [
+  '--dsw-alias-bg-layer-2',
+  ...APPEARANCE_SURFACE_TOKENS,
+] as const
+
+function alphaChannel(value: string): number | null {
+  const color = value.trim().toLowerCase()
+  if (color === '') return null
+  if (color === 'transparent') return 0
+
+  const hex = /^#([0-9a-f]{4}|[0-9a-f]{8})$/i.exec(color)?.[1]
+  if (hex !== undefined) {
+    const channel = hex.length === 4 ? `${hex[3]}${hex[3]}` : hex.slice(6)
+    return Number.parseInt(channel, 16) / 255
+  }
+
+  const slashAlpha = /\/\s*([\d.]+)(%)?\s*\)$/.exec(color)
+  if (slashAlpha?.[1] !== undefined) {
+    const parsed = Number.parseFloat(slashAlpha[1])
+    return slashAlpha[2] === '%' ? parsed / 100 : parsed
+  }
+
+  const legacy = /^(?:rgba|hsla)\((.*)\)$/.exec(color)?.[1]
+  if (legacy !== undefined) {
+    const parts = legacy.split(',')
+    if (parts.length === 4 && parts[3] !== undefined) return Number.parseFloat(parts[3])
+    return 1
+  }
+
+  if (/^(?:rgb|hsl|hwb|lab|lch|oklab|oklch|color)\(/.test(color)
+    || /^#[0-9a-f]{3,6}$/i.test(color)
+    || /^[a-z]+$/i.test(color)) return 1
+  return null
+}
+
+function inheritedTokenValue(
+  element: HTMLElement,
+  style: CSSStyleDeclaration,
+  name: string,
+): string {
+  const computed = style.getPropertyValue(name)
+  if (computed.trim() !== '') return computed
+  for (let node: HTMLElement | null = element; node !== null; node = node.parentElement) {
+    const inline = node.style.getPropertyValue(name)
+    if (inline.trim() !== '') return inline
+  }
+  return ''
+}
+
+function translucentToken(
+  element: HTMLElement,
+  style: CSSStyleDeclaration,
+  names: readonly string[],
+): string | undefined {
+  return names.find((name) => {
+    const alpha = alphaChannel(inheritedTokenValue(element, style, name))
+    return alpha !== null && alpha < 0.999
+  })
+}
+
+/**
+ * Reuse translucent DSH surfaces only inside the floating seat. Opaque themes
+ * retain native input, tip, and menu tokens, so the bridge stays inert without
+ * an appearance extension and never changes text/control opacity.
+ */
+export function syncFloatingSurfaces(targets: Pick<ComposerTargets, 'seat' | 'card'>): void {
+  const style = window.getComputedStyle(targets.card)
+  const surface = translucentToken(targets.card, style, APPEARANCE_SURFACE_TOKENS)
+  if (surface === undefined) {
+    targets.seat.removeAttribute('data-input-anywhere-themed')
+    targets.seat.style.removeProperty('--dsh-input-anywhere-surface')
+    targets.seat.style.removeProperty('--dsh-input-anywhere-menu-surface')
+    return
+  }
+
+  const menuSurface = translucentToken(targets.card, style, APPEARANCE_MENU_SURFACE_TOKENS)
+    ?? surface
+  targets.seat.setAttribute('data-input-anywhere-themed', '')
+  targets.seat.style.setProperty('--dsh-input-anywhere-surface', `var(${surface})`)
+  targets.seat.style.setProperty('--dsh-input-anywhere-menu-surface', `var(${menuSurface})`)
+}
+
 export function clearFloatingStyles(targets: ComposerTargets): void {
   targets.seat.removeAttribute('data-input-anywhere-floating')
+  targets.seat.removeAttribute('data-input-anywhere-themed')
   targets.card.removeAttribute('data-input-anywhere-floating-card')
   targets.scroller.removeAttribute('data-input-anywhere-floating-host')
   for (const property of [
     '--dsh-input-anywhere-x',
     '--dsh-input-anywhere-y',
     '--dsh-input-anywhere-width',
+    '--dsh-input-anywhere-surface',
+    '--dsh-input-anywhere-menu-surface',
   ]) targets.seat.style.removeProperty(property)
   targets.card.style.removeProperty('--dsh-input-anywhere-card-height')
 }
@@ -139,6 +232,7 @@ export function applyFloatingStyles(targets: ComposerTargets, layout: FloatingLa
   targets.seat.style.setProperty('--dsh-input-anywhere-y', `${layout.y}px`)
   targets.seat.style.setProperty('--dsh-input-anywhere-width', `${layout.width}px`)
   targets.card.style.setProperty('--dsh-input-anywhere-card-height', `${layout.height}px`)
+  syncFloatingSurfaces(targets)
 }
 
 /** Find the trailing toolbar branch without assuming which Slot owns its controls. */

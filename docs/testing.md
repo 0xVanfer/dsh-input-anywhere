@@ -22,7 +22,8 @@
 - extension and attachment rows in minimum-height measurement;
 - absolute overlay exclusion;
 - leading/trailing toolbar discovery without model-owner guessing;
-- scoped application and removal of floating markers and custom properties.
+- scoped application and removal of floating markers and custom properties;
+- translucent inherited surface detection for card/dock/menu layers, opaque-theme fallback, and opacity ownership.
 
 ### React integration tests
 
@@ -30,28 +31,33 @@
 
 - preserving left and right third-party controls while moving the whole seat;
 - trailing-region ownership without claiming extension controls;
-- extension rows added and resized after floating;
+- extension rows and seat-local dock panels added or resized after floating;
 - keyboard move, corner resize, Enter activation, and reset;
 - latest-layout persistence during teardown;
 - immediate reset persistence;
-- marker discovery after a late mount;
+- marker discovery after a late mount or marker-attribute update;
+- explicit pointer-capture cleanup on Escape and unmount;
 - transformed-shell fail-closed behavior;
+- live appearance-token updates and runtime blur/filter docking;
 - denied storage;
 - missing-marker behavior and lifecycle cleanup.
 
-### Browser CSS tests
+### Browser integration and CSS tests
 
-`tests/browser/responsive.spec.ts` runs in Chromium and validates behavior that DOM emulators cannot reliably implement:
+`tests/browser/client-runtime.spec.ts` loads the built lazy-CJS Client package through a minimal `window.__ModuleLoader__`, mounts the registered React component in Chromium, and verifies Slot activation, DOM discovery, floating projection, live theme inheritance, marker removal/rebinding, pointer-capture cancellation, and lifecycle disposal.
+
+`tests/browser/responsive.spec.ts` uses a focused composer fixture for CSS behavior that DOM emulators cannot reliably implement:
 
 - composer container-query breakpoints;
 - permission/plugin toolbar separation;
 - generic trailing-menu compaction;
-- native trajectory-clearance override;
-- shell-overlay z-index relationship;
+- native trajectory-clearance override and the owned z-index baseline;
+- translucent floating card, task/queue/goal panels, and in-seat menus without whole-seat opacity;
+- an owned positioned containing block for resize handles;
 - handle visibility only on direct hover/focus;
 - 44 px coarse-pointer targets.
 
-These tests use an isolated composer fixture. They do not require a running DSH process and do not modify a real profile or session.
+The browser tests do not require a running DSH process and do not modify a real profile or session. They exercise the built package in a controlled DSH-shaped DOM, not the complete DSH Web shell.
 
 ### Bundle verification
 
@@ -62,7 +68,11 @@ These tests use an isolated composer fixture. They do not require a running DSH 
 - executes the Client factory with real declared externals;
 - verifies the exact external set;
 - invokes Client `apply` against a fake Cordis context;
-- checks style ownership and additive Slot registration options.
+- checks style installation/disposal and additive Slot registration options.
+
+### Packed artifact verification
+
+`scripts/verify-package.mjs` extracts the generated tarball, asserts the exact public packlist, validates export and DSH manifest paths, executes the packed Host/Client artifacts, and installs the tarball into a temporary clean consumer with lifecycle scripts disabled. CI runs this verifier before uploading the artifact.
 
 ## Commands
 
@@ -90,7 +100,8 @@ Create and inspect the npm artifact:
 ```sh
 mkdir -p artifacts
 pnpm pack --pack-destination artifacts
-npm install --ignore-scripts ./artifacts/dsh-input-anywhere-0.1.0.tgz
+PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+pnpm verify:package "./artifacts/dsh-input-anywhere-${PACKAGE_VERSION}.tgz"
 ```
 
 ## Package-format note
@@ -119,7 +130,7 @@ Record DSH, browser, OS, and extension versions in the release notes.
 
 ## CI
 
-`.github/workflows/ci.yml` installs Node and pnpm from repository metadata, installs Chromium, runs `pnpm check`, packs the package, and uploads the tarball. Pull requests must not bypass browser tests.
+`.github/workflows/ci.yml` uses commit-pinned Actions, installs the repository-pinned Node/pnpm toolchain and Chromium, runs `pnpm check`, builds the tarball, verifies the packed artifact, and only then uploads it. Pull requests must not bypass browser or package verification.
 
 ## Current limitations
 

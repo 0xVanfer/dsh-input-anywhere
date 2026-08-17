@@ -7,7 +7,7 @@ Move and resize the native DeepSeek Harness Web composer without replacing its i
 
 [简体中文](README.zh-CN.md)
 
-> **Release status:** `0.1.0` is an experimental compatibility release for DeepSeek Harness `0.1.0-rc.6`. The plugin relies on documented Slot contracts and a small set of currently stable composer DOM markers. Review the [compatibility contract](docs/compatibility.md) before using it with another DSH release or a replacement composer.
+> **Release status:** `0.1.1` is the current unpublished development version for DeepSeek Harness `0.1.0-rc.6`; npm `latest` remains `0.1.0`. The plugin relies on documented Slot contracts and a small set of currently stable composer DOM markers. Review the [compatibility contract](docs/compatibility.md) before using it with another DSH release or a replacement composer.
 
 ## Overview
 
@@ -29,6 +29,7 @@ The plugin deliberately does **not** create another textarea and does not replac
 - Visual Viewport clamping during window, orientation, and soft-keyboard changes.
 - Left and right edge snapping that follows conversation-boundary changes.
 - Container-query rules that prevent permission, extension, model, and plugin controls from overlapping.
+- Floating-seat inheritance for the composer card, task/todo, goal, queue, and in-seat menu surfaces without fading text or controls.
 - Versioned `localStorage` persistence with validation, page-hide flushing, and re-clamping.
 - Forty-four-pixel controls on coarse-pointer devices.
 - Scoped cleanup of classes, attributes, inline properties, observers, listeners, pointer capture, timers, and animation frames.
@@ -55,6 +56,8 @@ The package peer range allows compatible DSH releases below `0.2.0`, but that ra
 ```sh
 dsh plugin --profile web add dsh-input-anywhere
 ```
+
+This installs the registry `latest` version (`0.1.0` at the time this `0.1.1` development tree was audited). It does not install the unpublished changes in this checkout.
 
 Restart the Web profile after adding or removing the package. DSH resolves package manifests and the Client plugin roster at process startup.
 
@@ -104,9 +107,13 @@ The plugin moves the complete `data-composer-seat`, so contributors already rend
 - observes children added, removed, and resized after floating;
 - treats all trailing `aria-haspopup="menu"` controls consistently in an extremely narrow card instead of guessing which extension owns the model control;
 - re-discovers the composer when marker ancestors appear late or are replaced;
-- removes only `dsh-input-anywhere-*` markers and properties during reset or teardown.
+- adopts inherited translucent `--dsw-alias-bg-layer-1`, `--dsw-alias-bg-layer-2`, or `--dsw-alias-bg-base` surfaces only while floating;
+- scopes the bridge to the seat so `conversation.input.dock` task/todo, goal, queue, and in-seat menu surfaces follow the same hierarchy;
+- watches appearance changes on composer ancestors and removes only `dsh-input-anywhere-*` markers and properties during reset or teardown.
 
 A replacement composer is compatible only when it preserves the marker hierarchy listed in [docs/compatibility.md](docs/compatibility.md). If required markers are absent, the move control has no composer side effects. If an ancestor establishes a fixed-position containing block with `transform`, `filter`, `perspective`, or strong containment, floating is refused and native docking is retained; applying viewport coordinates in that layout would be incorrect.
+
+Appearance compatibility is token-based and does not identify or modify another plugin. When inherited DSH card or main-surface tokens are translucent, the floating card and its seat-local task/todo, goal, queue, and menu surfaces are bridged to the corresponding token hierarchy. The plugin never applies `opacity` to the complete seat, so editor text, native controls, extensions, focus states, and hit testing remain fully opaque. Header-level Subagent and Jobs menus, portaled overlays, and other regions outside the seat are intentionally left to their owning modules. If an appearance extension enables ancestor blur/filter after floating, the composer returns to native docking rather than using invalid viewport coordinates.
 
 ## Accessibility
 

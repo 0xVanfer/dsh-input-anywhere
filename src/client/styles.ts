@@ -55,7 +55,7 @@ export const pluginStyles = String.raw`
   bottom: auto !important;
   left: var(--dsh-input-anywhere-x) !important;
   top: var(--dsh-input-anywhere-y) !important;
-  /* Above conversation chrome, below shell overlays and Settings (z-index 1000). */
+  /* Local floating layer; shell and modal stacking remain owned by DSH. */
   z-index: 50 !important;
   box-sizing: border-box;
   width: var(--dsh-input-anywhere-width) !important;
@@ -66,12 +66,20 @@ export const pluginStyles = String.raw`
   --dsh-chat-content-width: calc(var(--dsh-input-anywhere-width) - 64px);
 }
 
+.dsh-input-anywhere-seat[data-input-anywhere-floating][data-input-anywhere-themed] {
+  /* Scope companion panels and in-seat menus to the same translucent hierarchy. */
+  --dsw-specific-tip: var(--dsh-input-anywhere-surface);
+  --dsw-specific-menu: var(--dsh-input-anywhere-menu-surface);
+}
+
 .dsh-input-anywhere-card {
   container-type: inline-size;
   --dsh-input-anywhere-compact-control: 28px;
 }
 
 .dsh-input-anywhere-card[data-input-anywhere-floating-card] {
+  position: relative;
+  background-color: var(--dsh-input-anywhere-surface, var(--dsw-specific-input-major));
   height: var(--dsh-input-anywhere-card-height);
   min-height: 116px;
   max-height: none;

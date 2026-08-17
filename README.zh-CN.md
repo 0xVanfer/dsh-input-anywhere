@@ -4,7 +4,7 @@
 
 [English](README.md)
 
-> **发布状态：** `0.1.0` 是面向 DeepSeek Harness `0.1.0-rc.6` 的实验性兼容版本。插件同时依赖 Slot 契约和少量当前稳定的 composer DOM marker。用于其他 DSH 版本或替换 composer 前，请阅读[兼容性契约](docs/compatibility.md)。
+> **发布状态：** `0.1.1` 是当前面向 DeepSeek Harness `0.1.0-rc.6` 的未发布开发版本；npm `latest` 仍为 `0.1.0`。插件同时依赖 Slot 契约和少量当前稳定的 composer DOM marker。用于其他 DSH 版本或替换 composer 前，请阅读[兼容性契约](docs/compatibility.md)。
 
 ## 工作方式
 
@@ -26,6 +26,7 @@
 - 窗口、方向、软键盘和 Visual Viewport 变化后重新限制位置。
 - 左右边缘吸附，并跟随 conversation 边界移动。
 - 根据 composer 容器宽度避免权限、扩展菜单、模型和插件控件重叠。
+- 浮动时让输入 card、任务/Todo、Goal、Queue 和 seat 内菜单继承透明 DSH 表面，但不降低文字和控件的不透明度。
 - 使用版本化 `localStorage`，在交互完成、页面隐藏和卸载时刷新最新布局。
 - 粗指针设备使用 44 px 目标尺寸。
 - 浮动时释放原生 trajectory 的 composer 底部占位，复位后恢复。
@@ -52,6 +53,8 @@ Peer dependency 允许 `<0.2.0` 的兼容 DSH 版本，但这不表示所有版�
 ```sh
 dsh plugin --profile web add dsh-input-anywhere
 ```
+
+该命令安装 registry 的 `latest` 版本；在本次 `0.1.1` 开发树审计时它仍是 `0.1.0`，不会包含当前未发布改动。
 
 本地仓库：
 
@@ -89,7 +92,7 @@ dsh-input-anywhere:layout:v1
 
 其中只有模式、视口坐标、宽高和可选的水平锚点，不包含提示词、消息、工作区路径、模型名称或账户数据。插件不发起网络请求。
 
-损坏、过期或被浏览器策略禁止的存储会被忽略；当前挂载周期内的交互仍可继续。
+损坏、过期或被浏览器策略禁止的存储会被忽略；当前挂载周期内的交互仍可继续。在浏览器策略允许时，已完成的交互、复位、`pagehide` 和插件卸载都会刷新最新布局，其中复位会立即持久化。
 
 ## 扩展兼容规则
 
@@ -99,9 +102,13 @@ dsh-input-anywhere:layout:v1
 - 观察浮动后新增、删除和改变尺寸的 card 子节点；
 - 在极窄 card 下统一压缩 trailing 区域中带 `aria-haspopup="menu"` 的菜单控件，而不猜测某个按钮的所有者；
 - marker 延迟出现或祖先被替换后重新发现 composer；
-- 只移除 `dsh-input-anywhere-*` 自有标记。
+- 仅在浮动状态继承透明的 `--dsw-alias-bg-layer-1`、`--dsw-alias-bg-layer-2` 或 `--dsw-alias-bg-base` 表面；
+- 将 `conversation.input.dock` 中的任务/Todo、Goal、Queue 以及 seat 内菜单限制在同一透明层级；
+- 监听 composer 祖先的外观变化，并且只移除 `dsh-input-anywhere-*` 自有标记。
 
 替换 composer 必须保留兼容性文档所列 marker 层级。marker 缺失时，控件不会修改 composer。若祖先通过 `transform`、`filter`、`perspective` 或强 containment 建立 fixed containing block，插件会保持原生停靠，因为此时直接使用视口坐标会产生错误位置。
+
+外观兼容只读取继承的 DSH theme token，不识别也不修改其他插件。当卡片或主界面表面 token 含透明度时，浮动 card 以及 seat 内的任务/Todo、Goal、Queue 和菜单表面会桥接到对应透明层级；插件不会给完整 seat 设置 `opacity`，因此编辑器文字、原生控件、扩展控件、焦点样式和命中测试保持完全不透明。顶栏 Subagent/Jobs 菜单、portal overlay 和 seat 外部区域仍由各自模块负责。如果外观扩展在浮动后开启会建立 fixed containing block 的 blur/filter，输入区会安全返回原生停靠。
 
 ## 无障碍
 

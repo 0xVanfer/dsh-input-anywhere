@@ -82,6 +82,25 @@ describe('visible composer bounds', () => {
       height: 800,
     })
   })
+
+  it('falls back to the viewport when the conversation is vertically off-screen', () => {
+    const root = document.createElement('main')
+    setRect(root, rect(0, 900, 1000, 600))
+
+    expect(visibleBounds(root, {
+      offsetLeft: 0,
+      offsetTop: 0,
+      width: 1000,
+      height: 800,
+    })).toEqual({
+      left: 0,
+      top: 0,
+      right: 1000,
+      bottom: 800,
+      width: 1000,
+      height: 800,
+    })
+  })
 })
 
 describe('extension-aware composer DOM', () => {
@@ -123,7 +142,7 @@ describe('extension-aware composer DOM', () => {
     expect(minimumCardHeight(result)).toBe(204)
   })
 
-  it('finds the model menu after third-party right-side contributors', () => {
+  it('finds the trailing branch after third-party right-side contributors', () => {
     const card = document.createElement('div')
     const row = document.createElement('div')
     const tools = document.createElement('div')
@@ -161,9 +180,73 @@ describe('extension-aware composer DOM', () => {
 })
 
 describe('floating style ownership', () => {
+  it('bridges translucent card, dock, and menu surfaces without changing opacity', () => {
+    const result = targets()
+    result.card.style.setProperty('--dsw-specific-input-major', 'hsl(220, 20%, 20%)')
+    result.card.style.setProperty('--dsw-alias-bg-layer-1', 'hsla(220, 20%, 20%, 0.42)')
+    result.card.style.setProperty('--dsw-alias-bg-layer-2', 'hsla(220, 20%, 24%, 0.48)')
+
+    applyFloatingStyles(result, {
+      mode: 'floating',
+      x: 120,
+      y: 80,
+      width: 640,
+      height: 180,
+    })
+
+    expect(result.seat.style.getPropertyValue('--dsh-input-anywhere-surface'))
+      .toBe('var(--dsw-alias-bg-layer-1)')
+    expect(result.seat.style.getPropertyValue('--dsh-input-anywhere-menu-surface'))
+      .toBe('var(--dsw-alias-bg-layer-2)')
+    expect(result.seat.hasAttribute('data-input-anywhere-themed')).toBe(true)
+    expect(result.card.style.opacity).toBe('')
+
+    clearFloatingStyles(result)
+    expect(result.seat.style.getPropertyValue('--dsh-input-anywhere-surface')).toBe('')
+    expect(result.seat.style.getPropertyValue('--dsh-input-anywhere-menu-surface')).toBe('')
+    expect(result.seat.hasAttribute('data-input-anywhere-themed')).toBe(false)
+  })
+
+  it('falls back to a translucent main surface when the card surface is opaque', () => {
+    const result = targets()
+    result.card.style.setProperty('--dsw-alias-bg-layer-1', 'hsl(220 20% 20%)')
+    result.card.style.setProperty('--dsw-alias-bg-base', 'rgb(20 30 40 / 35%)')
+
+    applyFloatingStyles(result, {
+      mode: 'floating',
+      x: 120,
+      y: 80,
+      width: 640,
+      height: 180,
+    })
+
+    expect(result.seat.style.getPropertyValue('--dsh-input-anywhere-surface'))
+      .toBe('var(--dsw-alias-bg-base)')
+    expect(result.seat.style.getPropertyValue('--dsh-input-anywhere-menu-surface'))
+      .toBe('var(--dsw-alias-bg-base)')
+  })
+
+  it('retains the native composer surface for opaque themes', () => {
+    const result = targets()
+    result.card.style.setProperty('--dsw-alias-bg-layer-1', '#112233')
+    result.card.style.setProperty('--dsw-alias-bg-base', 'rgb(20, 30, 40)')
+
+    applyFloatingStyles(result, {
+      mode: 'floating',
+      x: 120,
+      y: 80,
+      width: 640,
+      height: 180,
+    })
+
+    expect(result.seat.style.getPropertyValue('--dsh-input-anywhere-surface')).toBe('')
+    expect(result.seat.hasAttribute('data-input-anywhere-themed')).toBe(false)
+  })
+
   it('applies and removes only plugin-owned markers and properties', () => {
     const result = targets()
     result.card.dataset.extensionOwned = 'keep'
+    result.seat.style.setProperty('--dsw-specific-tip', 'rgb(1, 2, 3)')
 
     applyFloatingStyles(result, {
       mode: 'floating',
@@ -184,6 +267,7 @@ describe('floating style ownership', () => {
     expect(result.scroller.hasAttribute('data-input-anywhere-floating-host')).toBe(false)
     expect(result.seat.style.getPropertyValue('--dsh-input-anywhere-width')).toBe('')
     expect(result.card.style.getPropertyValue('--dsh-input-anywhere-card-height')).toBe('')
+    expect(result.seat.style.getPropertyValue('--dsw-specific-tip')).toBe('rgb(1, 2, 3)')
     expect(result.card.dataset.extensionOwned).toBe('keep')
   })
 })

@@ -106,6 +106,29 @@ export function InputAnywhereControls(): ReactElement {
     })
   }
 
+  const discardScheduledLayout = (): void => {
+    if (frameRef.current !== null) window.cancelAnimationFrame(frameRef.current)
+    frameRef.current = null
+    pendingLayoutRef.current = null
+  }
+
+  const cancelActiveInteraction = (): void => {
+    const interaction = interactionRef.current
+    interactionRef.current = null
+    document.documentElement.classList.remove(
+      'dsh-input-anywhere-interacting',
+      'dsh-input-anywhere-resizing',
+    )
+    if (interaction === null) return
+    try {
+      if (interaction.target.hasPointerCapture(interaction.pointerId)) {
+        interaction.target.releasePointerCapture(interaction.pointerId)
+      }
+    } catch {
+      // A replacement/removal can invalidate capture before observer cleanup runs.
+    }
+  }
+
   // Rebind when a replacement composer preserves the Slot cell but swaps marker ancestors.
   useLayoutEffect(() => {
     const controls = controlsRef.current
@@ -114,9 +137,14 @@ export function InputAnywhereControls(): ReactElement {
     let current: ComposerTargets | null = null
     let trailingRegion: HTMLElement | null = null
     let dependencyObserver: MutationObserver | null = null
+    let markerObserver: MutationObserver | null = null
 
-    const releaseCurrent = (): void => {
+    const releaseCurrent = (discardPending = false): void => {
+      cancelActiveInteraction()
+      if (discardPending) discardScheduledLayout()
       dependencyObserver?.disconnect()
+      markerObserver?.disconnect()
+      markerObserver = null
       dependencyObserver = null
       trailingRegion?.removeAttribute('data-input-anywhere-trailing')
       trailingRegion = null
@@ -135,7 +163,7 @@ export function InputAnywhereControls(): ReactElement {
       const root = scroller?.closest<HTMLElement>('[data-phase]') ?? null
       if (card === null || seat === null || scroller === null || root === null) {
         if (current !== null) {
-          releaseCurrent()
+          releaseCurrent(true)
           setTargets(null)
         }
         return
@@ -145,7 +173,7 @@ export function InputAnywhereControls(): ReactElement {
         && current.scroller === scroller
         && current.root === root) return
 
-      releaseCurrent()
+      releaseCurrent(true)
       const next = { seat, card, scroller, root }
       current = next
       seat.classList.add('dsh-input-anywhere-seat')
@@ -161,12 +189,33 @@ export function InputAnywhereControls(): ReactElement {
       markTrailingRegion()
       dependencyObserver = new MutationObserver(markTrailingRegion)
       dependencyObserver.observe(card, { childList: true, subtree: true })
+      markerObserver = new MutationObserver(discover)
+      markerObserver.observe(card, { attributes: true, attributeFilter: ['data-composer-card'] })
+      markerObserver.observe(seat, { attributes: true, attributeFilter: ['data-composer-seat'] })
+      markerObserver.observe(scroller, { attributes: true, attributeFilter: ['data-conversation-scroll'] })
+      markerObserver.observe(root, { attributes: true, attributeFilter: ['data-phase'] })
       setTargets(next)
     }
 
     discover()
-    const discoveryObserver = new MutationObserver(discover)
-    discoveryObserver.observe(document.body, { childList: true, subtree: true })
+    const containsControls = (node: Node): boolean => node === controls || node.contains(controls)
+    const discoveryObserver = new MutationObserver((records) => {
+      const relevant = records.some(record => containsControls(record.target)
+        || Array.from(record.addedNodes).some(containsControls)
+        || Array.from(record.removedNodes).some(containsControls))
+      if (relevant) discover()
+    })
+    discoveryObserver.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: [
+        'data-composer-card',
+        'data-composer-seat',
+        'data-conversation-scroll',
+        'data-phase',
+      ],
+    })
     return () => {
       discoveryObserver.disconnect()
       releaseCurrent()
@@ -179,11 +228,18 @@ export function InputAnywhereControls(): ReactElement {
 
   useLayoutEffect(() => {
     if (targets === null) return
+    return () => { clearFloatingStyles(targets) }
+  }, [targets])
+
+  useLayoutEffect(() => {
+    if (targets === null) return
     if (layout.mode === 'docked') {
       clearFloatingStyles(targets)
       return
     }
     if (hasFixedContainingBlock(targets.seat)) {
+      cancelActiveInteraction()
+      discardScheduledLayout()
       clearFloatingStyles(targets)
       commitLayout(DOCKED_LAYOUT)
       return
@@ -236,6 +292,13 @@ export function InputAnywhereControls(): ReactElement {
     const normalize = (): void => {
       const current = layoutRef.current
       if (current.mode === 'docked') return
+      if (hasFixedContainingBlock(targets.seat)) {
+        cancelActiveInteraction()
+        discardScheduledLayout()
+        clearFloatingStyles(targets)
+        commitLayout(DOCKED_LAYOUT)
+        return
+      }
       const next = clampFloating(
         current,
         visibleBounds(targets.root),
@@ -270,7 +333,15 @@ export function InputAnywhereControls(): ReactElement {
       syncObservedChildren()
       normalize()
     })
-    mutations.observe(targets.card, { childList: true, subtree: true, characterData: true })
+    mutations.observe(targets.card, { childList: true, subtree: true })
+    // Theme extensions commonly write inherited surface tokens on body or a shell ancestor.
+    const appearanceMutations = new MutationObserver(normalize)
+    for (let ancestor = targets.seat.parentElement; ancestor !== null; ancestor = ancestor.parentElement) {
+      appearanceMutations.observe(ancestor, {
+        attributes: true,
+        attributeFilter: ['style', 'class', 'data-ds-dark-theme'],
+      })
+    }
     window.addEventListener('resize', normalize)
     window.addEventListener('orientationchange', normalize)
     window.addEventListener('transitionend', normalize)
@@ -279,6 +350,7 @@ export function InputAnywhereControls(): ReactElement {
     return () => {
       observer.disconnect()
       mutations.disconnect()
+      appearanceMutations.disconnect()
       window.removeEventListener('resize', normalize)
       window.removeEventListener('orientationchange', normalize)
       window.removeEventListener('transitionend', normalize)

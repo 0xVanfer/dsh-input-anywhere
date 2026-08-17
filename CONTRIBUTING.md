@@ -79,4 +79,6 @@ Do not commit `lib`, Playwright reports, local artifacts, or profile changes. Th
 
 ## Releases
 
-Maintainers follow the release procedure in `docs/testing.md`: update the changelog, run the full gate, inspect the tarball, install that exact tarball in a clean DSH profile, complete the manual smoke matrix, then create the release tag and npm publication.
+Maintainers follow the release procedure in `docs/testing.md`: update the changelog, run the full gate, verify the exact tarball with `pnpm verify:package`, install that tarball in a clean DSH profile, complete the manual smoke matrix, then create the release tag and npm publication.
+
+Publication is currently manual and this repository does not claim npm provenance. Do not enable `publishConfig.provenance` until a reviewed trusted-publishing workflow uses a protected environment, `id-token: write`, and the same verified tarball.

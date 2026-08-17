@@ -180,7 +180,7 @@ export function snapFloating(
   }, bounds, extraHeight, minimumCardHeight)
 }
 
-/** Resize from one corner while keeping its opposite corner geometrically stable. */
+/** Resize from one corner while keeping its opposite corner stable when bounds permit. */
 export function resizeFloating(
   origin: FloatingLayout,
   direction: ResizeDirection,
@@ -194,21 +194,33 @@ export function resizeFloating(
   const north = direction.includes('n')
   const proposedWidth = origin.width + (west ? -deltaX : deltaX)
   const proposedHeight = origin.height + (north ? -deltaY : deltaY)
+  const clampedExtraHeight = Math.max(0, extraHeight)
   const availableWidth = Math.max(1, bounds.width - EDGE_MARGIN * 2)
-  const availableHeight = Math.max(1, bounds.height - EDGE_MARGIN * 2 - Math.max(0, extraHeight))
-  const width = clamp(proposedWidth, Math.min(MIN_WIDTH, availableWidth), availableWidth)
-  const height = clamp(
-    proposedHeight,
-    Math.min(Math.max(MIN_CARD_HEIGHT, minimumCardHeight), availableHeight),
-    availableHeight,
-  )
+  const availableHeight = Math.max(1, bounds.height - EDGE_MARGIN * 2 - clampedExtraHeight)
+  const minWidth = Math.min(MIN_WIDTH, availableWidth)
+  const minHeight = Math.min(Math.max(MIN_CARD_HEIGHT, minimumCardHeight), availableHeight)
+  const oppositeX = west ? origin.x + origin.width : origin.x
+  const oppositeY = north ? origin.y + origin.height : origin.y
+  const horizontalRoom = west
+    ? oppositeX - bounds.left - EDGE_MARGIN
+    : bounds.right - EDGE_MARGIN - oppositeX
+  const verticalRoom = north
+    ? oppositeY - bounds.top - EDGE_MARGIN
+    : bounds.bottom - EDGE_MARGIN - clampedExtraHeight - oppositeY
+  const width = clamp(proposedWidth, minWidth, Math.max(minWidth, Math.min(availableWidth, horizontalRoom)))
+  const height = clamp(proposedHeight, minHeight, Math.max(minHeight, Math.min(availableHeight, verticalRoom)))
+  const anchor = width === origin.width
+    ? origin.anchor
+    : (origin.anchor === 'left' && !west) || (origin.anchor === 'right' && west)
+      ? origin.anchor
+      : undefined
   const candidate: FloatingLayout = {
     mode: 'floating',
-    x: west ? origin.x + origin.width - width : origin.x,
-    y: north ? origin.y + origin.height - height : origin.y,
+    x: west ? oppositeX - width : oppositeX,
+    y: north ? oppositeY - height : oppositeY,
     width,
     height,
-    ...(origin.anchor === undefined ? {} : { anchor: origin.anchor }),
+    ...(anchor === undefined ? {} : { anchor }),
   }
   return clampFloating(candidate, bounds, extraHeight, minimumCardHeight)
 }

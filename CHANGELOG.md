@@ -6,9 +6,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
-### Added
+The current development target is `0.1.1`; it has not been tagged or published.
 
-- Formal CI, browser tests, release documentation, contribution guidance, and security policy.
+### Changed
+
+- Floating composer cards and seat-local task/todo, goal, queue, and menu surfaces now inherit translucent DSH layer tokens without changing text or control opacity.
+- Active floating layouts return to native docking if a theme extension adds a transformed, filtered, or strongly contained ancestor at runtime.
+- Browser verification now loads the built Client package, and CI verifies the exact packed artifact before upload.
+
+### Fixed
+
+- Preserve the opposite resize edge at viewport boundaries and release incompatible horizontal anchors.
+- Fall back to viewport bounds when the conversation root is vertically outside the visible viewport.
+- Release pointer capture and remove stale floating projection when composer markers are replaced or removed.
+- Own the positioned containing block required by portaled resize handles.
 
 ## [0.1.0] - 2026-08-17
 

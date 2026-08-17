@@ -2,7 +2,7 @@
 
 ## Tested baseline
 
-The `0.1.0` release is developed and tested against:
+The published `0.1.0` release and current unpublished `0.1.1` development target are tested against:
 
 | Dependency | Tested version |
 | --- | --- |
@@ -61,6 +61,19 @@ The implementation is designed to coexist with:
 At card widths up to 500 px, all menu buttons in the marked trailing branch are compacted consistently. Direct text spans are hidden while the button's accessible name, title, icon, or chevron remains available. Extension authors should provide a meaningful `aria-label` or equivalent accessible name for compactable menu buttons.
 
 Normal-flow card rows contribute to the floating minimum height. `position: absolute` and `position: fixed` overlays are excluded.
+
+## Appearance extensions
+
+The floating seat can inherit transparency from generic DSH surface tokens without depending on an extension package name:
+
+- `--dsw-alias-bg-layer-1` is preferred for the card and `conversation.input.dock` panels;
+- `--dsw-alias-bg-layer-2` is preferred for in-seat menus, then layer-1/base is used as fallback;
+- `--dsw-alias-bg-base` is the fallback for extensions that expose only main-interface transparency;
+- opaque or unrecognized token formats leave `--dsw-specific-input-major`, `--dsw-specific-tip`, and `--dsw-specific-menu` unchanged;
+- changes written to `style`, `class`, or `data-ds-dark-theme` on composer ancestors are observed while floating;
+- only plugin-owned seat variables and the floating card/seat markers are changed; whole-seat `opacity`, global DSH tokens, portaled UI, and third-party DOM outside the seat are never modified.
+
+This contract covers `dsh-any-background 0.1.7` and similarly implemented appearance extensions. It covers token-based Todo/task, Goal, Queue, and in-seat menu contributors; header-level Subagent/Jobs menus and replacement composers remain owned by their modules. Blur/filter remains subject to fixed-containing-block safety below. Enabling such a value at runtime restores native docking.
 
 ## Known incompatibilities
 

@@ -1,6 +1,6 @@
 {
   "name": "dsh-input-anywhere",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Move and resize the native DeepSeek Harness composer without replacing its input machine.",
   "type": "module",
   "main": "lib/index.js",
@@ -35,7 +35,9 @@
     "build": "pnpm run clean && tsc -p tsconfig.json && tsc -p tsconfig.client.json && tsdown && node scripts/verify-bundle.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.client.json --noEmit && tsc -p tsconfig.test.json",
     "test": "vitest run",
+    "pretest:browser": "pnpm run build",
     "test:browser": "playwright test",
+    "verify:package": "node scripts/verify-package.mjs",
     "check:quick": "pnpm run typecheck && pnpm run test && pnpm run build",
     "check": "pnpm run check:quick && pnpm run test:browser",
     "watch": "pnpm run build && node scripts/watch.mjs",
@@ -63,8 +65,7 @@
   "author": "0xVanfer",
   "packageManager": "pnpm@10.16.1",
   "publishConfig": {
-    "access": "public",
-    "provenance": true
+    "access": "public"
   },
   "engines": {
     "node": ">=22.19"
