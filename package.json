@@ -1,0 +1,111 @@
+{
+  "name": "dsh-input-anywhere",
+  "version": "0.1.0",
+  "description": "Move and resize the native DeepSeek Harness composer without replacing its input machine.",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "types": "./lib/types/client/index.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/client.js",
+    "lib/client.js.map",
+    "lib/types",
+    "cordis.patch.yml",
+    "README.md",
+    "README.zh-CN.md",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
+    "docs"
+  ],
+  "scripts": {
+    "clean": "node scripts/clean.mjs",
+    "build": "pnpm run clean && tsc -p tsconfig.json && tsc -p tsconfig.client.json && tsdown && node scripts/verify-bundle.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.client.json --noEmit && tsc -p tsconfig.test.json",
+    "test": "vitest run",
+    "test:browser": "playwright test",
+    "check:quick": "pnpm run typecheck && pnpm run test && pnpm run build",
+    "check": "pnpm run check:quick && pnpm run test:browser",
+    "watch": "pnpm run build && node scripts/watch.mjs",
+    "prepare": "pnpm run build",
+    "prepublishOnly": "pnpm run check"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/0xVanfer/dsh-input-anywhere.git"
+  },
+  "bugs": {
+    "url": "https://github.com/0xVanfer/dsh-input-anywhere/issues"
+  },
+  "homepage": "https://github.com/0xVanfer/dsh-input-anywhere#readme",
+  "keywords": [
+    "deepseek",
+    "deepseek-harness",
+    "dsh",
+    "cordis",
+    "composer",
+    "draggable",
+    "resizable"
+  ],
+  "license": "MIT",
+  "author": "0xVanfer",
+  "packageManager": "pnpm@10.16.1",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "engines": {
+    "node": ">=22.19"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ],
+      "platform": "web"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-client-runtime": ">=0.1.0-rc.6 <0.2.0",
+    "@deepseek-ai/dsh-client-ui-conversation": ">=0.1.0-rc.6 <0.2.0",
+    "@deepseek-ai/dsh-client-ui-primitives": ">=0.1.0-rc.6 <0.2.0",
+    "@deepseek-ai/dsh-client-ui-slots": ">=0.1.0-rc.6 <0.2.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-client-runtime": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-ui-conversation": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-ui-primitives": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-ui-slots": "^0.1.0-rc.6",
+    "@playwright/test": "^1.62.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/node": "^22.19.0",
+    "@types/react": "~18.3.1",
+    "@types/react-dom": "~18.3.0",
+    "happy-dom": "^20.11.2",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "tsdown": "^0.22.2",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  }
+}

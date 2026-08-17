@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.client.json",
+  "compilerOptions": {
+    "declarationMap": false,
+    "noEmit": true,
+    "rootDir": ".",
+    "types": ["node", "vitest/globals"]
+  },
+  "include": [
+    "tests/**/*.ts",
+    "tests/**/*.tsx",
+    "playwright.config.ts",
+    "vitest.config.ts",
+    "src/client/**/*.ts",
+    "src/client/**/*.tsx"
+  ],
+  "exclude": []
+}

@@ -1,0 +1,5 @@
+# Install the package as a Host row so dsh-client-modules discovers its
+# dsh.client manifest and adds the browser half to the Web plugin roster.
+- insert:
+    - id: input-anywhere
+      name: dsh-input-anywhere

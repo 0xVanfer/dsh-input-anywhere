@@ -1,0 +1,50 @@
+name: Bug report
+description: Report a reproducible problem in dsh-input-anywhere
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Please remove sensitive conversation content from screenshots and logs.
+  - type: input
+    id: dsh-version
+    attributes:
+      label: DeepSeek Harness version
+      placeholder: 0.1.0-rc.6
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and operating system
+      placeholder: Chrome 135 on macOS 15
+    validations:
+      required: true
+  - type: textarea
+    id: extensions
+    attributes:
+      label: Other DSH extensions
+      description: List extensions that contribute to composer or input Slots.
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Relevant diagnostics
+      render: shell
