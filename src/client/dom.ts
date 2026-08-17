@@ -1,3 +1,4 @@
+import type { InputAnywherePreferences } from '../preferences-contract.ts'
 import {
   EDGE_MARGIN,
   MIN_CARD_HEIGHT,
@@ -104,14 +105,18 @@ export function minimumCardHeight(targets: ComposerTargets): number {
   const scroll = targets.card.querySelector<HTMLElement>('[data-input-scroll]')
   if (scroll === null) return MIN_CARD_HEIGHT
   const cardStyle = window.getComputedStyle(targets.card)
-  const normalChildren = Array.from(targets.card.children).filter((child): child is HTMLElement => {
-    if (!(child instanceof HTMLElement) || child === scroll) return false
-    const position = child.style.position || window.getComputedStyle(child).position
-    return position !== 'absolute' && position !== 'fixed'
+  const normalChildren = Array.from(targets.card.children).flatMap((child) => {
+    if (!(child instanceof HTMLElement) || child === scroll) return []
+    const style = window.getComputedStyle(child)
+    const position = child.style.position || style.position
+    return position === 'absolute' || position === 'fixed' ? [] : [{ child, style }]
   })
   const itemCount = normalChildren.length + 1
   const fixedHeight = normalChildren.reduce(
-    (sum, child) => sum + child.getBoundingClientRect().height,
+    (sum, { child, style }) => sum
+      + child.getBoundingClientRect().height
+      + cssPixels(child.style.marginTop || style.marginTop)
+      + cssPixels(child.style.marginBottom || style.marginBottom),
     0,
   )
   const chrome = cssPixels(cardStyle.paddingTop)
@@ -131,6 +136,16 @@ const APPEARANCE_MENU_SURFACE_TOKENS = [
   '--dsw-alias-bg-layer-2',
   ...APPEARANCE_SURFACE_TOKENS,
 ] as const
+
+interface ResolvedColor {
+  value: string
+  alpha: number
+}
+
+export interface FloatingAppearance {
+  preferences: InputAnywherePreferences
+  inputActive: boolean
+}
 
 function alphaChannel(value: string): number | null {
   const color = value.trim().toLowerCase()
@@ -162,51 +177,174 @@ function alphaChannel(value: string): number | null {
   return null
 }
 
+function withAlpha(value: string, alpha: number): string | undefined {
+  const color = value.trim()
+  if (color.toLowerCase() === 'transparent') return alpha === 0 ? 'transparent' : undefined
+  const shortHex = /^#([0-9a-f])([0-9a-f])([0-9a-f])(?:[0-9a-f])?$/i.exec(color)
+  if (shortHex?.[1] !== undefined && shortHex[2] !== undefined && shortHex[3] !== undefined) {
+    const channels = [shortHex[1], shortHex[2], shortHex[3]].map(channel => Number.parseInt(`${channel}${channel}`, 16))
+    return `rgb(${channels.join(' ')} / ${alpha})`
+  }
+  const longHex = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})(?:[0-9a-f]{2})?$/i.exec(color)
+  if (longHex?.[1] !== undefined && longHex[2] !== undefined && longHex[3] !== undefined) {
+    const channels = [longHex[1], longHex[2], longHex[3]].map(channel => Number.parseInt(channel, 16))
+    return `rgb(${channels.join(' ')} / ${alpha})`
+  }
+  const functional = /^(rgba?|hsla?)\((.*)\)$/i.exec(color)
+  if (functional?.[1] !== undefined && functional[2] !== undefined) {
+    const fn = functional[1].toLowerCase().startsWith('rgb') ? 'rgb' : 'hsl'
+    const body = functional[2]
+    if (body.includes(',')) {
+      const channels = body.split(',').slice(0, 3).map(part => part.trim())
+      return channels.length === 3 ? `${fn}a(${channels.join(', ')}, ${alpha})` : undefined
+    }
+    const channels = body.split('/')[0]?.trim()
+    return channels === undefined || channels === '' ? undefined : `${fn}(${channels} / ${alpha})`
+  }
+  const modern = /^(hwb|lab|lch|oklab|oklch|color)\((.*)\)$/i.exec(color)
+  if (modern?.[1] !== undefined && modern[2] !== undefined) {
+    const channels = modern[2].split('/')[0]?.trim()
+    return channels === undefined || channels === ''
+      ? undefined
+      : `${modern[1]}(${channels} / ${alpha})`
+  }
+  return /^[a-z]+$/i.test(color)
+    ? `color-mix(in srgb, ${color} ${alpha * 100}%, transparent)`
+    : undefined
+}
+
 function inheritedTokenValue(
   element: HTMLElement,
   style: CSSStyleDeclaration,
   name: string,
 ): string {
   const computed = style.getPropertyValue(name)
-  if (computed.trim() !== '') return computed
+  if (computed.trim() !== '') return computed.trim()
   for (let node: HTMLElement | null = element; node !== null; node = node.parentElement) {
     const inline = node.style.getPropertyValue(name)
-    if (inline.trim() !== '') return inline
+    if (inline.trim() !== '') return inline.trim()
   }
   return ''
 }
 
-function translucentToken(
+function firstResolvedColor(
   element: HTMLElement,
   style: CSSStyleDeclaration,
   names: readonly string[],
-): string | undefined {
-  return names.find((name) => {
-    const alpha = alphaChannel(inheritedTokenValue(element, style, name))
-    return alpha !== null && alpha < 0.999
+  fallback: string,
+  requireTint = false,
+): ResolvedColor | undefined {
+  for (const name of names) {
+    const value = inheritedTokenValue(element, style, name)
+    const alpha = alphaChannel(value)
+    if (alpha !== null && (!requireTint || alpha > 0)) return { value, alpha }
+  }
+  const alpha = alphaChannel(fallback)
+  return alpha === null || (requireTint && alpha <= 0) ? undefined : { value: fallback, alpha }
+}
+
+function firstTranslucentColor(
+  element: HTMLElement,
+  style: CSSStyleDeclaration,
+  names: readonly string[],
+): ResolvedColor | undefined {
+  for (const name of names) {
+    const value = inheritedTokenValue(element, style, name)
+    const alpha = alphaChannel(value)
+    if (alpha !== null && alpha < 0.999) return { value, alpha }
+  }
+  return undefined
+}
+
+function positiveIntersection(first: DOMRect, second: DOMRect, bounds: RectLike): boolean {
+  const left = Math.max(first.left, second.left, bounds.left)
+  const top = Math.max(first.top, second.top, bounds.top)
+  const right = Math.min(first.right, second.right, bounds.right)
+  const bottom = Math.min(first.bottom, second.bottom, bounds.bottom)
+  return right - left > 0.5 && bottom - top > 0.5
+}
+
+export function overlapsChatOutput(targets: ComposerTargets): boolean {
+  const seatRect = targets.seat.getBoundingClientRect()
+  if (seatRect.width <= 0 || seatRect.height <= 0) return false
+  const bounds = visibleBounds(targets.root)
+  const flows = targets.scroller.querySelectorAll<HTMLElement>('[data-chat-flow]')
+  return Array.from(flows).some((flow) => {
+    if (targets.seat.contains(flow)
+      || flow.hidden
+      || flow.style.display === 'none'
+      || window.getComputedStyle(flow).display === 'none') return false
+    const flowRect = flow.getBoundingClientRect()
+    return flowRect.width > 0 && flowRect.height > 0 && positiveIntersection(seatRect, flowRect, bounds)
   })
 }
 
-/**
- * Reuse translucent DSH surfaces only inside the floating seat. Opaque themes
- * retain native input, tip, and menu tokens, so the bridge stays inert without
- * an appearance extension and never changes text/control opacity.
- */
-export function syncFloatingSurfaces(targets: Pick<ComposerTargets, 'seat' | 'card'>): void {
-  const style = window.getComputedStyle(targets.card)
-  const surface = translucentToken(targets.card, style, APPEARANCE_SURFACE_TOKENS)
-  if (surface === undefined) {
-    targets.seat.removeAttribute('data-input-anywhere-themed')
-    targets.seat.style.removeProperty('--dsh-input-anywhere-surface')
-    targets.seat.style.removeProperty('--dsh-input-anywhere-menu-surface')
-    return
-  }
+function clearAppearance(targets: Pick<ComposerTargets, 'seat'>): void {
+  targets.seat.removeAttribute('data-input-anywhere-themed')
+  targets.seat.style.removeProperty('--dsh-input-anywhere-surface')
+  targets.seat.style.removeProperty('--dsh-input-anywhere-menu-surface')
+}
 
-  const menuSurface = translucentToken(targets.card, style, APPEARANCE_MENU_SURFACE_TOKENS)
-    ?? surface
-  targets.seat.setAttribute('data-input-anywhere-themed', '')
-  targets.seat.style.setProperty('--dsh-input-anywhere-surface', `var(${surface})`)
-  targets.seat.style.setProperty('--dsh-input-anywhere-menu-surface', `var(${menuSurface})`)
+/** Resolve user preference, theme alpha, overlap, and input activity into owned paint values. */
+export function syncFloatingAppearance(
+  targets: ComposerTargets,
+  appearance: FloatingAppearance,
+): void {
+  const { preferences, inputActive } = appearance
+  const overlap = preferences.overlapAware && overlapsChatOutput(targets)
+  const style = window.getComputedStyle(targets.card)
+  const overlapMode = inputActive ? preferences.overlapActiveMode : preferences.overlapIdleMode
+  const overlapAlpha = overlap && overlapMode === 'custom'
+    ? inputActive ? preferences.overlapActiveOpacity : preferences.overlapIdleOpacity
+    : undefined
+  const forcedAlpha = overlapAlpha
+    ?? (preferences.surfaceMode === 'custom' ? preferences.surfaceOpacity : undefined)
+  const baseSurfaceSource = firstResolvedColor(
+    targets.card,
+    style,
+    APPEARANCE_SURFACE_TOKENS,
+    style.backgroundColor,
+    forcedAlpha !== undefined,
+  )
+  const themeSurfaceSource = firstTranslucentColor(targets.card, style, APPEARANCE_SURFACE_TOKENS)
+  const surfaceSource = forcedAlpha === undefined && preferences.surfaceMode === 'theme'
+    ? themeSurfaceSource
+    : baseSurfaceSource
+  const themeMenuSource = firstTranslucentColor(targets.card, style, APPEARANCE_MENU_SURFACE_TOKENS)
+  const menuSource = forcedAlpha === undefined && preferences.surfaceMode === 'theme'
+    ? themeMenuSource ?? surfaceSource
+    : firstResolvedColor(
+        targets.card,
+        style,
+        APPEARANCE_MENU_SURFACE_TOKENS,
+        surfaceSource?.value ?? style.backgroundColor,
+        forcedAlpha !== undefined,
+      )
+  const themeAlpha = preferences.surfaceMode === 'theme' && surfaceSource !== undefined
+    ? surfaceSource.alpha
+    : undefined
+  const surfaceAlpha = forcedAlpha ?? themeAlpha ?? 1
+  const menuAlpha = forcedAlpha ?? (preferences.surfaceMode === 'theme' ? menuSource?.alpha : undefined) ?? surfaceAlpha
+  const shouldBridge = surfaceSource !== undefined
+    && menuSource !== undefined
+    && (forcedAlpha !== undefined || themeAlpha !== undefined)
+
+  if (shouldBridge) {
+    const surface = withAlpha(surfaceSource.value, surfaceAlpha)
+    const menu = withAlpha(menuSource.value, menuAlpha)
+    if (surface !== undefined && menu !== undefined) {
+      targets.seat.setAttribute('data-input-anywhere-themed', '')
+      targets.seat.style.setProperty('--dsh-input-anywhere-surface', surface)
+      targets.seat.style.setProperty('--dsh-input-anywhere-menu-surface', menu)
+    } else clearAppearance(targets)
+  } else clearAppearance(targets)
+
+  const controlsOpacity = preferences.controlsMode === 'surface'
+    ? surfaceAlpha
+    : preferences.controlsMode === 'custom'
+      ? preferences.controlsOpacity
+      : 1
+  targets.seat.style.setProperty('--dsh-input-anywhere-controls-opacity', String(controlsOpacity))
 }
 
 export function clearFloatingStyles(targets: ComposerTargets): void {
@@ -220,19 +358,28 @@ export function clearFloatingStyles(targets: ComposerTargets): void {
     '--dsh-input-anywhere-width',
     '--dsh-input-anywhere-surface',
     '--dsh-input-anywhere-menu-surface',
+    '--dsh-input-anywhere-controls-opacity',
   ]) targets.seat.style.removeProperty(property)
   targets.card.style.removeProperty('--dsh-input-anywhere-card-height')
 }
 
-export function applyFloatingStyles(targets: ComposerTargets, layout: FloatingLayout): void {
+function setStyleProperty(element: HTMLElement, property: string, value: string): void {
+  if (element.style.getPropertyValue(property) !== value) element.style.setProperty(property, value)
+}
+
+export function applyFloatingStyles(
+  targets: ComposerTargets,
+  layout: FloatingLayout,
+  appearance: FloatingAppearance,
+): void {
   targets.seat.setAttribute('data-input-anywhere-floating', '')
   targets.card.setAttribute('data-input-anywhere-floating-card', '')
   targets.scroller.setAttribute('data-input-anywhere-floating-host', '')
-  targets.seat.style.setProperty('--dsh-input-anywhere-x', `${layout.x}px`)
-  targets.seat.style.setProperty('--dsh-input-anywhere-y', `${layout.y}px`)
-  targets.seat.style.setProperty('--dsh-input-anywhere-width', `${layout.width}px`)
-  targets.card.style.setProperty('--dsh-input-anywhere-card-height', `${layout.height}px`)
-  syncFloatingSurfaces(targets)
+  setStyleProperty(targets.seat, '--dsh-input-anywhere-x', `${layout.x}px`)
+  setStyleProperty(targets.seat, '--dsh-input-anywhere-y', `${layout.y}px`)
+  setStyleProperty(targets.seat, '--dsh-input-anywhere-width', `${layout.width}px`)
+  setStyleProperty(targets.card, '--dsh-input-anywhere-card-height', `${layout.height}px`)
+  syncFloatingAppearance(targets, appearance)
 }
 
 /** Find the trailing toolbar branch without assuming which Slot owns its controls. */

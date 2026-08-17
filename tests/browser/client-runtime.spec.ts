@@ -47,7 +47,8 @@ const fixture = `
       --dsw-alias-bg-layer-2: var(--test-layer-2);
     }
     [data-phase] { position: fixed; inset: 40px 80px; }
-    [data-conversation-scroll] { width: 100%; height: 100%; }
+    [data-conversation-scroll] { position: relative; width: 100%; height: 100%; }
+    [data-chat-flow] { position: absolute; inset: 0; pointer-events: none; }
     [data-composer-seat] { display: flex; flex-direction: column; gap: 6px; }
     [data-composer-card] {
       box-sizing: border-box;
@@ -66,6 +67,7 @@ const fixture = `
   </style>
   <main data-phase="active">
     <section data-conversation-scroll>
+      <div data-chat-flow></div>
       <div data-composer-seat>
         <div class="dock-panel">Queued message</div>
         <div id="composer-card" data-composer-card>
@@ -109,6 +111,12 @@ async function mountPackedClient(page: import('@playwright/test').Page): Promise
       'react-dom': ReactDOM,
       'react/jsx-runtime': { Fragment: React.Fragment, jsx, jsxs: jsx },
       '@deepseek-ai/dsh-client-ui-primitives': {
+        Button: ({ children, icon, ...props }: Record<string, unknown>) => React.createElement(
+          'button',
+          props,
+          icon as React.ReactNode,
+          children as React.ReactNode,
+        ),
         IconRefreshOutline16: () => React.createElement('span', { 'data-test-icon': 'refresh' }),
       },
     }
@@ -120,19 +128,53 @@ async function mountPackedClient(page: import('@playwright/test').Page): Promise
     if (mount === null) throw new Error('slot mount is missing')
     const root = ReactDOM.createRoot(mount)
     const disposers: Array<() => void> = []
+    const settingsSnapshot = {
+      status: 'unavailable',
+      value: undefined,
+      base: undefined,
+      user: undefined,
+      revision: 0,
+      writable: false,
+      mode: 'memory',
+    }
     client.apply({
       effect(factory: () => unknown) {
         const dispose = factory()
         if (typeof dispose === 'function') disposers.push(dispose as () => void)
       },
+      locale: {
+        register() { return () => {} },
+        bind() {
+          return (key: string) => ({
+            moveInput: 'Move input',
+            resetPosition: 'Reset input position',
+          })[key] ?? key
+        },
+      },
+      settingsScope: {
+        bind() {
+          return {
+            getSnapshot: () => settingsSnapshot,
+            subscribe: () => () => {},
+            set: async () => {},
+            unset: async () => {},
+          }
+        },
+      },
       slots: {
-        inject(name: string, register: () => unknown) {
-          if (name !== 'conversation.input.left') throw new Error(`unexpected slot: ${name}`)
+        inject(_name: string, register: () => unknown) {
           const dispose = register()
           if (typeof dispose === 'function') disposers.push(dispose as () => void)
         },
-        register(_options: unknown, Component: ComponentType) {
-          root.render(React.createElement(Component))
+        register(
+          options: { name: string, inject?: () => Record<string, unknown> },
+          Component: ComponentType<Record<string, unknown>>,
+        ) {
+          if (options.name !== 'conversation.input.left') return () => {}
+          root.render(React.createElement(Component, {
+            ...options.inject?.(),
+            input: { draft: '' },
+          }))
           return () => { root.unmount() }
         },
       },
@@ -164,7 +206,14 @@ test('packed client mounts, rebinds, inherits surfaces, and disposes in Chromium
   await expect(card).toHaveCSS('background-color', 'rgba(10, 20, 30, 0.35)')
   await expect(dock).toHaveCSS('background-color', 'rgba(10, 20, 30, 0.35)')
   await expect(menu).toHaveCSS('background-color', 'rgba(40, 50, 60, 0.45)')
-  await expect(move).toHaveCSS('opacity', '1')
+  await expect(move).toHaveCSS('opacity', '0.35')
+
+  const textarea = page.locator('textarea')
+  await textarea.focus()
+  await expect(card).toHaveCSS('background-color', 'rgba(10, 20, 30, 0.92)')
+  await expect(move).toHaveCSS('opacity', '0.92')
+  await textarea.evaluate(element => { element.blur() })
+  await expect(card).toHaveCSS('background-color', 'rgba(10, 20, 30, 0.35)')
 
   await page.locator('body').evaluate((body) => {
     body.classList.remove('theme-translucent')

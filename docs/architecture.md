@@ -6,25 +6,30 @@ The plugin changes the location and dimensions of the existing DSH composer with
 
 ## Package composition
 
-- `src/index.ts`: inert Host half used for package and Client manifest discovery.
-- `src/client/index.ts`: Client plugin registration and lifecycle-owned stylesheet installation.
-- `src/client/InputAnywhereControls.tsx`: React interaction controller, observers, persistence, and Slot UI.
-- `src/client/dom.ts`: composer DOM discovery, geometry adapters, extension-row measurement, and scoped style ownership.
-- `src/client/layout.ts`: pure persistence and geometry functions.
-- `src/client/styles.ts`: responsive, focus, coarse-pointer, and floating-state CSS.
+- `src/index.ts`: Host registration for the durable `dsh-input-anywhere` settings schema.
+- `src/preferences-contract.ts`: shared preference types, defaults, field list, and defensive normalization.
+- `src/client/index.ts`: Client settings scope, locale, Slot registration, and lifecycle-owned stylesheet installation.
+- `src/client/InputAnywhereSettings.tsx`: dedicated `settings.section` controls.
+- `src/client/preferences.ts`: official `SettingsScope` adapter, browser fallback, and fallback-to-Host migration.
+- `src/client/InputAnywhereControls.tsx`: React interaction controller, observers, layout persistence, and Slot UI.
+- `src/client/dom.ts`: composer DOM discovery, geometry adapters, overlap detection, extension measurement, and scoped style ownership.
+- `src/client/layout.ts`: pure layout persistence and geometry functions.
+- `src/client/styles.ts`: settings, responsive, focus, coarse-pointer, floating-state, and opacity CSS.
 
 The production Client entry is bundled as DSH lazy-CJS and registers through `window.__ModuleLoader__` with package id `dsh-input-anywhere`.
 
 ## Runtime sequence
 
-1. DSH renders the `conversation.input.left` contribution for a session.
-2. The component discovers the nearest composer card, seat, conversation scroller, and phase root by stable data markers.
-3. Discovery is retried after child-tree and marker-attribute changes. If marker ancestors are replaced, pointer capture, pending target-specific animation frames, and the old target projection are cleaned before new targets are bound.
-4. The move control reads the native card and seat rectangles and creates an initial floating layout in viewport CSS pixels.
-5. React state owns the serializable layout. CSS custom properties project the state onto the native seat and card.
-6. Pointer changes are coalesced through one animation frame. Keyboard changes commit directly.
-7. Resize, mutation, viewport, orientation, scroll, and transition notifications re-clamp the active layout.
-8. Reset, Slot teardown, or plugin stop removes plugin-owned DOM changes and returns control to native layout CSS.
+1. The Host registers the `dsh-input-anywhere` schema when the optional settings service is available.
+2. The Client binds that namespace, installs its bilingual settings section, and exposes a browser-local writable fallback while Host settings are unavailable.
+3. DSH renders the `conversation.input.left` contribution for a session when the master switch is enabled.
+4. The component discovers the nearest composer card, seat, conversation scroller, and phase root by stable data markers.
+5. Discovery is retried after child-tree and marker-attribute changes. If marker ancestors are replaced, pointer capture, pending target-specific animation frames, and the old target projection are cleaned before new targets are bound.
+6. The move control reads the native card and seat rectangles and creates an initial floating layout in viewport CSS pixels.
+7. React state owns the serializable layout. CSS custom properties project the state onto the native seat and card.
+8. Pointer changes are coalesced through one animation frame. Keyboard changes commit directly.
+9. Resize, mutation, viewport, orientation, scroll, and transition notifications share one cancellable animation-frame scheduler, so each frame performs at most one re-clamp and overlap refresh.
+10. Reset, disabling, Slot teardown, or plugin stop removes plugin-owned DOM changes and returns control to native layout CSS.
 
 ## Coordinate model
 
@@ -51,33 +56,35 @@ This is a deliberate fail-closed behavior. Correctly converting viewport coordin
 
 The plugin does not enumerate or serialize Slot data. It interacts only with rendered DOM leaves required for layout:
 
-- all normal-flow card children except the input scroller contribute to dynamic minimum height;
+- all normal-flow card children except the input scroller contribute their border-box height and vertical margins to dynamic minimum height;
 - absolutely or fixed-positioned overlays do not consume minimum height;
-- newly added and removed card children are synchronized with a `ResizeObserver`;
+- added, removed, resized, or restyled card children are synchronized through scoped mutation/resize observers;
 - the toolbar trailing branch is marked as a region, not assigned to a guessed model owner;
 - at extreme widths, every trailing menu control receives the same compact rule;
 - third-party DOM is never moved independently from the native seat.
 
 ## Appearance inheritance
 
-The native composer uses `--dsw-specific-input-major`; native Todo, Goal, and Queue dock panels use `--dsw-specific-tip`; in-seat panels and menus may use `--dsw-specific-menu`. Appearance extensions may encode card or main-interface opacity in `--dsw-alias-bg-layer-1`, `--dsw-alias-bg-layer-2`, and `--dsw-alias-bg-base`. During floating only, the DOM adapter reads the inherited values. If a surface contains a real alpha channel below one, it writes plugin-owned `--dsh-input-anywhere-surface` and `--dsh-input-anywhere-menu-surface` references on the seat and adds `data-input-anywhere-themed`. Otherwise no bridge marker or property exists and native tokens remain unchanged.
+The native composer uses `--dsw-specific-input-major`; native Todo, Goal, and Queue dock panels use `--dsw-specific-tip`; in-seat panels and menus may use `--dsw-specific-menu`. Appearance extensions may encode card or main-interface opacity in `--dsw-alias-bg-layer-1`, `--dsw-alias-bg-layer-2`, and `--dsw-alias-bg-base`. During floating only, the DOM adapter resolves inherited colors and writes plugin-owned `--dsh-input-anywhere-surface` and `--dsh-input-anywhere-menu-surface` paint values. Hex, RGB/HSL, modern `hwb/lab/lch/oklab/oklch/color()` forms, and opaque named colors retain their tint while alpha is replaced. Output never points back to remapped DSH aliases, preventing CSS-variable cycles.
 
-Scoped CSS on that marked floating seat maps `--dsw-specific-tip` and `--dsw-specific-menu` to the plugin-owned references. This automatically covers current and future `conversation.input.dock` contributors that follow DSH tokens, without enumerating CSS-module classes or mutating contributor nodes. Portaled and header-level UI outside the seat cannot inherit the scoped mapping and is intentionally unaffected.
+The surface setting can preserve the resolved theme alpha, apply a custom alpha, or retain the opaque native surface. Scoped CSS maps `--dsw-specific-tip` and `--dsw-specific-menu` only inside a marked floating seat. This covers current and future `conversation.input.dock` contributors that follow DSH tokens without enumerating CSS-module classes or mutating contributor nodes. Portaled and header-level UI outside the seat cannot inherit the mapping and is intentionally unaffected.
 
-This is deliberately a background bridge rather than element `opacity`. Text, editor content, controls, extension nodes, focus rings, and hit targets remain fully opaque. The plugin does not inspect another plugin's id/settings or write DSH tokens globally or inline. Ancestor style/class changes trigger re-evaluation, and teardown removes the bridge marker and properties. If a live appearance change introduces a fixed-position containing block, the component restores native docking instead of copying blur/filter effects into an invalid coordinate system.
+Output overlap is a strict positive-area intersection between the floating seat and visible `[data-chat-flow]` elements under the current conversation scroller, clipped to usable viewport bounds. Hidden, zero-area, edge-touching, and seat-descendant candidates are excluded. A scoped mutation observer adds, removes, and immediately remeasures flow elements that appear after floating. The official `InputState.draft` and native editor focus are combined into the input-active state. Idle and input-active overlap states independently choose either the effective input surface or a custom alpha. Defaults preserve the theme alpha while idle and use 92% while entering text.
+
+No `opacity` is applied to the complete seat, card, editor, or text. Control opacity is a separate preference scoped to floating-card buttons and selects; it may follow the effective surface, use a custom value, or stay opaque. Ancestor style/class changes trigger re-evaluation, and teardown removes all plugin-owned bridge and control properties. If a live appearance change introduces a fixed-position containing block, the component restores native docking instead of copying blur/filter effects into an invalid coordinate system.
 
 ## Persistence
 
-The versioned record is stored at `dsh-input-anywhere:layout:v1`. Decode validates the version, mode, numeric fields, and optional anchor. Unknown or malformed values return the docked layout.
+Layout uses the versioned `dsh-input-anywhere:layout:v1` record. Decode validates the version, mode, numeric fields, and optional anchor. Unknown or malformed values return the docked layout. Normal updates are debounced; completed pointer interactions and reset persist immediately, while `pagehide` and unmount flush the latest committed or animation-frame-pending layout.
 
-Normal updates are debounced. Completed pointer interactions and reset persist immediately. `pagehide` and unmount flush the latest committed or animation-frame-pending layout. Storage errors are caught and do not disable the in-memory interaction.
+Preferences use the official Host `dsh-input-anywhere` settings namespace. The schema owns defaults and numeric bounds. Every online or fallback edit first enters the `dsh-input-anywhere:preferences:v1` write-ahead journal as a display snapshot plus per-field `set`/`unset` operations. The controller serializes mutations, then verifies each resolved `SettingsScope` call against the accepted `user`, `value`, and `revision` snapshot because the transport intentionally resolves after rejection recovery as well as success. Only confirmed operations are removed; a partial failure, revision conflict, or teardown preserves the remaining journal for retry. Untouched Host fields are never transferred, and reset is replayed as verified `unset` operations. If browser storage is blocked, the journal remains writable in memory and the settings page identifies it as page-only.
 
 ## Lifecycle ownership
 
-The Cordis Client plugin owns the stylesheet through `ctx.effect`. The React contribution owns:
+The Cordis Client plugin owns the stylesheet, locale dictionary, and preference-controller subscription through `ctx.effect`. The React contribution owns:
 
 - discovery, marker, dependency, and appearance `MutationObserver` instances;
-- root, seat, and child `ResizeObserver` subscriptions;
+- root, seat, dynamic chat-flow, and card-child `ResizeObserver` subscriptions;
 - viewport, window, orientation, and transition listeners;
 - animation frames and persistence timers;
 - active pointer capture and global interaction classes;

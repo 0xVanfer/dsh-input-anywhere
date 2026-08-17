@@ -7,7 +7,7 @@ Move and resize the native DeepSeek Harness Web composer without replacing its i
 
 [简体中文](README.zh-CN.md)
 
-> **Release status:** `0.1.1` is the current unpublished development version for DeepSeek Harness `0.1.0-rc.6`; npm `latest` remains `0.1.0`. The plugin relies on documented Slot contracts and a small set of currently stable composer DOM markers. Review the [compatibility contract](docs/compatibility.md) before using it with another DSH release or a replacement composer.
+> **Release status:** the source and changelog are prepared for `v0.1.1` on DeepSeek Harness `0.1.0-rc.6`; npm `latest` remains `0.1.0` until that release is published. The plugin relies on documented Slot contracts and a small set of currently stable composer DOM markers. Review the [compatibility contract](docs/compatibility.md) before using it with another DSH release or a replacement composer.
 
 ## Overview
 
@@ -29,8 +29,10 @@ The plugin deliberately does **not** create another textarea and does not replac
 - Visual Viewport clamping during window, orientation, and soft-keyboard changes.
 - Left and right edge snapping that follows conversation-boundary changes.
 - Container-query rules that prevent permission, extension, model, and plugin controls from overlapping.
-- Floating-seat inheritance for the composer card, task/todo, goal, queue, and in-seat menu surfaces without fading text or controls.
-- Versioned `localStorage` persistence with validation, page-hide flushing, and re-clamping.
+- A dedicated DSH settings section with a live master switch, independent input-surface and control opacity modes, reset, and English/Chinese labels.
+- Exact theme-alpha inheritance while idle, plus separately configurable idle/input-active behavior only when the floating seat intersects the current `[data-chat-flow]`.
+- Host-backed user settings with a writable browser fallback that migrates when the Host namespace becomes available.
+- Versioned layout `localStorage` persistence with validation, page-hide flushing, and re-clamping.
 - Forty-four-pixel controls on coarse-pointer devices.
 - Scoped cleanup of classes, attributes, inline properties, observers, listeners, pointer capture, timers, and animation frames.
 - Native trajectory clearance removal while floating and restoration after reset.
@@ -57,7 +59,7 @@ The package peer range allows compatible DSH releases below `0.2.0`, but that ra
 dsh plugin --profile web add dsh-input-anywhere
 ```
 
-This installs the registry `latest` version (`0.1.0` at the time this `0.1.1` development tree was audited). It does not install the unpublished changes in this checkout.
+Until `0.1.1` is published to npm, this command installs registry `latest` (`0.1.0`) rather than the audited source release in this checkout.
 
 Restart the Web profile after adding or removing the package. DSH resolves package manifests and the Client plugin roster at process startup.
 
@@ -87,24 +89,36 @@ Restart the Web profile, then open the existing DSH Web URL.
 
 Dragging within 24 px of the left or right usable boundary creates a persistent horizontal anchor. When the sidebar, details region, viewport, or responsive shell changes, an anchored composer follows the corresponding boundary.
 
+### Settings
+
+Open **Settings → Input position and appearance**. The defaults are:
+
+| Setting | Default |
+| --- | --- |
+| Feature switch | Enabled |
+| Input surface | Follow the resolved DSH theme alpha |
+| Input controls | Follow the effective input surface |
+| Output-overlap adjustment | Enabled |
+| While idle over output | Follow the input surface exactly |
+| While entering text over output | Custom 92% opacity |
+
+Turning the feature switch off performs the same native-dock restore as the toolbar reset control and persists the docked layout, so re-enabling does not revive a stale floating position. Each surface state can instead be opaque or use a custom 20–100% value. “Input active” means that the native editor is focused or the official DSH input state contains a non-empty draft. The overlap policy is inert while docked or when the seat does not intersect the current conversation's `[data-chat-flow]`.
+
 ## Persistence and Privacy
 
-The layout is stored locally under:
+Layout geometry is stored locally under `dsh-input-anywhere:layout:v1`. Appearance and enablement preferences use the Host `dsh-input-anywhere` user-settings namespace. Every edit first enters a browser write-ahead journal under `dsh-input-anywhere:preferences:v1`; confirmed Host fields are removed individually, while rejected, conflicted, partially completed, or interrupted operations remain for retry. Only changed fields are replayed, so untouched Host settings are preserved. If browser storage is blocked, settings remain writable for the current page and the settings section reports that limitation.
 
-```text
-dsh-input-anywhere:layout:v1
-```
+These records contain only layout geometry and the settings shown above. They do not contain prompts, messages, workspace paths, model names, or account data. The plugin performs no direct network requests; Host settings use the normal DSH settings transport.
 
-The value contains only the layout mode, viewport-space position, size, and optional horizontal anchor. It does not contain prompts, messages, workspace paths, model names, or account data. The plugin performs no network requests.
-
-Malformed, stale, or unavailable storage is ignored. The current interaction remains usable in memory. Completed interactions, reset, page hide, and plugin teardown flush the latest layout where browser policy permits it.
+Malformed, stale, or unavailable browser storage is ignored. The current interaction remains usable in memory. Completed interactions, reset, page hide, and plugin teardown flush the latest layout where browser policy permits it.
 
 ## Extension Compatibility
 
 The plugin moves the complete `data-composer-seat`, so contributors already rendered within the native seat move with it. It also:
 
-- measures normal-flow card children added by attachment or accessory extensions;
-- observes children added, removed, and resized after floating;
+- measures the border-box height and vertical margins of normal-flow card children added by attachment or accessory extensions;
+- observes children added, removed, resized, or restyled after floating;
+- dynamically observes `[data-chat-flow]` insertion/removal and coalesces event/observer geometry work to one pass per animation frame;
 - treats all trailing `aria-haspopup="menu"` controls consistently in an extremely narrow card instead of guessing which extension owns the model control;
 - re-discovers the composer when marker ancestors appear late or are replaced;
 - adopts inherited translucent `--dsw-alias-bg-layer-1`, `--dsw-alias-bg-layer-2`, or `--dsw-alias-bg-base` surfaces only while floating;
@@ -113,7 +127,7 @@ The plugin moves the complete `data-composer-seat`, so contributors already rend
 
 A replacement composer is compatible only when it preserves the marker hierarchy listed in [docs/compatibility.md](docs/compatibility.md). If required markers are absent, the move control has no composer side effects. If an ancestor establishes a fixed-position containing block with `transform`, `filter`, `perspective`, or strong containment, floating is refused and native docking is retained; applying viewport coordinates in that layout would be incorrect.
 
-Appearance compatibility is token-based and does not identify or modify another plugin. When inherited DSH card or main-surface tokens are translucent, the floating card and its seat-local task/todo, goal, queue, and menu surfaces are bridged to the corresponding token hierarchy. The plugin never applies `opacity` to the complete seat, so editor text, native controls, extensions, focus states, and hit testing remain fully opaque. Header-level Subagent and Jobs menus, portaled overlays, and other regions outside the seat are intentionally left to their owning modules. If an appearance extension enables ancestor blur/filter after floating, the composer returns to native docking rather than using invalid viewport coordinates.
+Appearance compatibility is token-based and does not identify or modify another plugin. Resolved DSH card/main-surface colors are converted into plugin-owned paint values, so the floating card and its seat-local task/todo, goal, queue, and menu surfaces retain the selected hierarchy without CSS-variable cycles. The plugin never applies `opacity` to the complete seat or editor; text, focus states, and hit testing remain intact. When the control mode follows or uses a custom value, opacity is intentionally limited to buttons and selects inside the floating card. Header-level Subagent and Jobs menus, portaled overlays, and other regions outside the seat remain owned by their modules. If an appearance extension enables ancestor blur/filter after floating, the composer returns to native docking rather than using invalid viewport coordinates.
 
 ## Accessibility
 
@@ -122,6 +136,10 @@ The move, reset, and corner controls are native buttons. All controls are keyboa
 This project does not currently claim WCAG conformance or completed screen-reader certification. Accessibility regressions are treated as bugs; include browser and assistive-technology details when reporting one.
 
 ## Troubleshooting
+
+### Settings are using browser fallback
+
+A Client-only HMR update cannot register the new Host settings namespace. The page remains writable through the local fallback, but restart the Web profile after rebuilding or installing this Host change so the values migrate into the DSH user-settings document.
 
 ### The control is not visible
 
@@ -165,7 +183,7 @@ PLAYWRIGHT_CHROMIUM_EXECUTABLE=/path/to/chromium pnpm test:browser
 
 `pnpm check:quick` runs type checks, unit/component tests, and the production build without launching a browser. `pnpm check` is the release gate and also runs Playwright.
 
-The browser artifact is `lib/client.js`, a DSH lazy-CJS package registered through `window.__ModuleLoader__`. The Host half is intentionally inert and exists so DSH can discover the `dsh.client` manifest.
+The browser artifact is `lib/client.js`, a DSH lazy-CJS package registered through `window.__ModuleLoader__`. The Host half registers the durable `dsh-input-anywhere` settings schema when the optional DSH settings service is available.
 
 For development HMR, run `pnpm watch` in this repository while a DSH Web process with the Client HMR receiver is active. Installing the package into a profile still requires a process restart because manifest discovery is a startup operation.
 

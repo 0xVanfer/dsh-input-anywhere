@@ -1,11 +1,14 @@
 // @vitest-environment happy-dom
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { DEFAULT_PREFERENCES } from '../src/preferences-contract.ts'
 import {
   applyFloatingStyles,
   clearFloatingStyles,
   findTrailingRegion,
   minimumCardHeight,
+  overlapsChatOutput,
+  syncFloatingAppearance,
   visibleBounds,
   type ComposerTargets,
 } from '../src/client/dom.ts'
@@ -26,6 +29,11 @@ function rect(left: number, top: number, width: number, height: number): DOMRect
 
 function setRect(element: Element, value: DOMRect): void {
   vi.spyOn(element, 'getBoundingClientRect').mockReturnValue(value)
+}
+
+const TEST_APPEARANCE = {
+  preferences: { ...DEFAULT_PREFERENCES, overlapAware: false, controlsMode: 'opaque' as const },
+  inputActive: false,
 }
 
 function targets(): ComposerTargets {
@@ -129,6 +137,10 @@ describe('extension-aware composer DOM', () => {
     const attachmentRail = document.createElement('div')
     const extensionAccessory = document.createElement('div')
     const toolbar = document.createElement('div')
+    attachmentRail.style.marginTop = '5px'
+    attachmentRail.style.marginBottom = '7px'
+    extensionAccessory.style.marginTop = '3px'
+    extensionAccessory.style.marginBottom = '4px'
     const overlay = document.createElement('div')
     overlay.style.position = 'absolute'
     result.card.append(overlay, attachmentRail, extensionAccessory, scroll, toolbar)
@@ -138,8 +150,8 @@ describe('extension-aware composer DOM', () => {
     setRect(toolbar, rect(0, 0, 500, 28))
     setRect(overlay, rect(0, 0, 500, 100))
 
-    // 128px rows + 8px padding + 2px border + 18px gaps + 48px input.
-    expect(minimumCardHeight(result)).toBe(204)
+    // 128px rows + 19px margins + 8px padding + 2px border + 18px gaps + 48px input.
+    expect(minimumCardHeight(result)).toBe(223)
   })
 
   it('finds the trailing branch after third-party right-side contributors', () => {
@@ -179,6 +191,26 @@ describe('extension-aware composer DOM', () => {
   })
 })
 
+describe('output overlap geometry', () => {
+  it('requires positive visible overlap with a current chat flow', () => {
+    const result = targets()
+    const flow = document.createElement('div')
+    flow.dataset.chatFlow = ''
+    result.scroller.prepend(flow)
+    setRect(result.root, rect(0, 0, 1000, 800))
+    setRect(result.seat, rect(200, 200, 400, 180))
+    setRect(flow, rect(100, 100, 700, 500))
+    expect(overlapsChatOutput(result)).toBe(true)
+
+    setRect(flow, rect(100, 20, 700, 180))
+    expect(overlapsChatOutput(result)).toBe(false)
+
+    setRect(flow, rect(100, 100, 700, 500))
+    flow.style.display = 'none'
+    expect(overlapsChatOutput(result)).toBe(false)
+  })
+})
+
 describe('floating style ownership', () => {
   it('bridges translucent card, dock, and menu surfaces without changing opacity', () => {
     const result = targets()
@@ -192,12 +224,12 @@ describe('floating style ownership', () => {
       y: 80,
       width: 640,
       height: 180,
-    })
+    }, TEST_APPEARANCE)
 
     expect(result.seat.style.getPropertyValue('--dsh-input-anywhere-surface'))
-      .toBe('var(--dsw-alias-bg-layer-1)')
+      .toBe('hsla(220, 20%, 20%, 0.42)')
     expect(result.seat.style.getPropertyValue('--dsh-input-anywhere-menu-surface'))
-      .toBe('var(--dsw-alias-bg-layer-2)')
+      .toBe('hsla(220, 20%, 24%, 0.48)')
     expect(result.seat.hasAttribute('data-input-anywhere-themed')).toBe(true)
     expect(result.card.style.opacity).toBe('')
 
@@ -218,12 +250,114 @@ describe('floating style ownership', () => {
       y: 80,
       width: 640,
       height: 180,
-    })
+    }, TEST_APPEARANCE)
 
     expect(result.seat.style.getPropertyValue('--dsh-input-anywhere-surface'))
-      .toBe('var(--dsw-alias-bg-base)')
+      .toBe('rgb(20 30 40 / 0.35)')
     expect(result.seat.style.getPropertyValue('--dsh-input-anywhere-menu-surface'))
-      .toBe('var(--dsw-alias-bg-base)')
+      .toBe('rgb(20 30 40 / 0.35)')
+  })
+
+  it('keeps the followed surface while idle and uses input-active alpha when covered', () => {
+    const result = targets()
+    const flow = document.createElement('div')
+    flow.dataset.chatFlow = ''
+    result.scroller.prepend(flow)
+    setRect(result.root, rect(0, 0, 1000, 800))
+    setRect(result.seat, rect(200, 200, 400, 180))
+    setRect(flow, rect(100, 100, 700, 500))
+    result.card.style.setProperty('--dsw-alias-bg-layer-1', 'rgba(10, 20, 30, 0.3)')
+    result.card.style.setProperty('--dsw-alias-bg-layer-2', 'rgba(40, 50, 60, 0.4)')
+
+    syncFloatingAppearance(result, { preferences: { ...DEFAULT_PREFERENCES }, inputActive: false })
+    expect(result.seat.style.getPropertyValue('--dsh-input-anywhere-surface'))
+      .toBe('rgba(10, 20, 30, 0.3)')
+    expect(result.seat.style.getPropertyValue('--dsh-input-anywhere-controls-opacity')).toBe('0.3')
+
+    syncFloatingAppearance(result, { preferences: { ...DEFAULT_PREFERENCES }, inputActive: true })
+    expect(result.seat.style.getPropertyValue('--dsh-input-anywhere-surface'))
+      .toBe('rgba(10, 20, 30, 0.92)')
+    expect(result.seat.style.getPropertyValue('--dsh-input-anywhere-controls-opacity')).toBe('0.92')
+  })
+
+  it('supports custom and opaque surface/control strategies outside overlap', () => {
+    const result = targets()
+    setRect(result.root, rect(0, 0, 1000, 800))
+    setRect(result.seat, rect(200, 200, 400, 180))
+    result.card.style.setProperty('--dsw-alias-bg-layer-1', '#102030')
+    result.card.style.setProperty('--dsw-alias-bg-layer-2', '#304050')
+
+    syncFloatingAppearance(result, {
+      preferences: {
+        ...DEFAULT_PREFERENCES,
+        overlapAware: false,
+        surfaceMode: 'custom',
+        surfaceOpacity: 0.7,
+        controlsMode: 'custom',
+        controlsOpacity: 0.8,
+      },
+      inputActive: false,
+    })
+    expect(result.seat.style.getPropertyValue('--dsh-input-anywhere-surface'))
+      .toBe('rgb(16 32 48 / 0.7)')
+    expect(result.seat.style.getPropertyValue('--dsh-input-anywhere-menu-surface'))
+      .toBe('rgb(48 64 80 / 0.7)')
+    expect(result.seat.style.getPropertyValue('--dsh-input-anywhere-controls-opacity')).toBe('0.8')
+
+    syncFloatingAppearance(result, {
+      preferences: {
+        ...DEFAULT_PREFERENCES,
+        overlapAware: false,
+        surfaceMode: 'opaque',
+        controlsMode: 'opaque',
+      },
+      inputActive: false,
+    })
+    expect(result.seat.hasAttribute('data-input-anywhere-themed')).toBe(false)
+    expect(result.seat.style.getPropertyValue('--dsh-input-anywhere-surface')).toBe('')
+    expect(result.seat.style.getPropertyValue('--dsh-input-anywhere-controls-opacity')).toBe('1')
+  })
+
+  it('rewrites modern theme colors without discarding custom alpha', () => {
+    const result = targets()
+    setRect(result.root, rect(0, 0, 1000, 800))
+    setRect(result.seat, rect(200, 200, 400, 180))
+    result.card.style.setProperty('--dsw-alias-bg-layer-1', 'oklch(62% 0.12 250 / 0.4)')
+    result.card.style.setProperty('--dsw-alias-bg-layer-2', 'color(display-p3 0.2 0.3 0.4 / 0.5)')
+
+    syncFloatingAppearance(result, {
+      preferences: {
+        ...DEFAULT_PREFERENCES,
+        overlapAware: false,
+        surfaceMode: 'custom',
+        surfaceOpacity: 0.7,
+      },
+      inputActive: false,
+    })
+    expect(result.seat.style.getPropertyValue('--dsh-input-anywhere-surface'))
+      .toBe('oklch(62% 0.12 250 / 0.7)')
+    expect(result.seat.style.getPropertyValue('--dsh-input-anywhere-menu-surface'))
+      .toBe('color(display-p3 0.2 0.3 0.4 / 0.7)')
+  })
+
+  it('skips a fully transparent layer when custom alpha needs a color tint', () => {
+    const result = targets()
+    setRect(result.root, rect(0, 0, 1000, 800))
+    setRect(result.seat, rect(200, 200, 400, 180))
+    result.card.style.setProperty('--dsw-alias-bg-layer-1', 'transparent')
+    result.card.style.setProperty('--dsw-alias-bg-base', 'rebeccapurple')
+
+    syncFloatingAppearance(result, {
+      preferences: {
+        ...DEFAULT_PREFERENCES,
+        overlapAware: false,
+        surfaceMode: 'custom',
+        surfaceOpacity: 0.6,
+      },
+      inputActive: false,
+    })
+    expect(result.seat.style.getPropertyValue('--dsh-input-anywhere-surface'))
+      .toBe('color-mix(in srgb, rebeccapurple 60%, transparent)')
   })
 
   it('retains the native composer surface for opaque themes', () => {
@@ -237,7 +371,7 @@ describe('floating style ownership', () => {
       y: 80,
       width: 640,
       height: 180,
-    })
+    }, TEST_APPEARANCE)
 
     expect(result.seat.style.getPropertyValue('--dsh-input-anywhere-surface')).toBe('')
     expect(result.seat.hasAttribute('data-input-anywhere-themed')).toBe(false)
@@ -254,7 +388,7 @@ describe('floating style ownership', () => {
       y: 80,
       width: 640,
       height: 180,
-    })
+    }, TEST_APPEARANCE)
 
     expect(result.seat.hasAttribute('data-input-anywhere-floating')).toBe(true)
     expect(result.scroller.hasAttribute('data-input-anywhere-floating-host')).toBe(true)
@@ -266,6 +400,7 @@ describe('floating style ownership', () => {
     expect(result.seat.hasAttribute('data-input-anywhere-floating')).toBe(false)
     expect(result.scroller.hasAttribute('data-input-anywhere-floating-host')).toBe(false)
     expect(result.seat.style.getPropertyValue('--dsh-input-anywhere-width')).toBe('')
+    expect(result.seat.style.getPropertyValue('--dsh-input-anywhere-controls-opacity')).toBe('')
     expect(result.card.style.getPropertyValue('--dsh-input-anywhere-card-height')).toBe('')
     expect(result.seat.style.getPropertyValue('--dsw-specific-tip')).toBe('rgb(1, 2, 3)')
     expect(result.card.dataset.extensionOwned).toBe('keep')

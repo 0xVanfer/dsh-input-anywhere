@@ -3,12 +3,15 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  useSyncExternalStore,
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactElement,
 } from 'react'
 import { createPortal } from 'react-dom'
 import { IconRefreshOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { en, type InputAnywhereTranslate } from './locales.ts'
+import { defaultPreferenceStore, type PreferenceStore } from './preferences.ts'
 import {
   DOCKED_LAYOUT,
   clampFloating,
@@ -70,7 +73,41 @@ function persistLayout(layout: ComposerLayout): void {
   }
 }
 
-export function InputAnywhereControls(): ReactElement {
+export interface InputAnywhereControlsProps {
+  preferences?: PreferenceStore
+  t?: InputAnywhereTranslate
+  input?: { readonly draft: string }
+}
+
+const fallbackTranslate: InputAnywhereTranslate = key => en[key]
+
+export function InputAnywhereControls({
+  preferences = defaultPreferenceStore,
+  t = fallbackTranslate,
+  input,
+}: InputAnywhereControlsProps = {}): ReactElement | null {
+  const snapshot = useSyncExternalStore(
+    preferences.subscribe,
+    preferences.getSnapshot,
+    preferences.getSnapshot,
+  )
+  const enabled = snapshot.preferences.enabled
+  useEffect(() => {
+    if (!enabled) persistLayout(DOCKED_LAYOUT)
+  }, [enabled])
+  if (!enabled) return null
+  return <ActiveInputAnywhereControls
+    preferences={snapshot.preferences}
+    t={t}
+    draftActive={(input?.draft.trim().length ?? 0) > 0}
+  />
+}
+
+function ActiveInputAnywhereControls({ preferences, t, draftActive }: {
+  preferences: ReturnType<PreferenceStore['getSnapshot']>['preferences']
+  t: InputAnywhereTranslate
+  draftActive: boolean
+}): ReactElement {
   const controlsRef = useRef<HTMLDivElement>(null)
   const layoutRef = useRef<ComposerLayout>(DOCKED_LAYOUT)
   const interactionRef = useRef<PointerInteraction | null>(null)
@@ -78,6 +115,8 @@ export function InputAnywhereControls(): ReactElement {
   const frameRef = useRef<number | null>(null)
   const [targets, setTargets] = useState<ComposerTargets | null>(null)
   const [layout, setLayout] = useState<ComposerLayout>(loadLayout)
+  const [editorFocused, setEditorFocused] = useState(false)
+  const inputActive = draftActive || editorFocused
   layoutRef.current = layout
 
   const commitLayout = (next: ComposerLayout): void => {
@@ -226,6 +265,38 @@ export function InputAnywhereControls(): ReactElement {
     }
   }, [])
 
+  useEffect(() => {
+    if (targets === null) {
+      setEditorFocused(false)
+      return
+    }
+    const inputRoot = targets.card.querySelector<HTMLElement>('[data-input-scroll]')
+    let frame: number | null = null
+    const update = (): void => {
+      frame = null
+      setEditorFocused(inputRoot?.contains(document.activeElement) ?? false)
+    }
+    const handleFocusIn = (event: FocusEvent): void => {
+      if (inputRoot !== null && event.target instanceof Node && inputRoot.contains(event.target)) {
+        if (frame !== null) window.cancelAnimationFrame(frame)
+        frame = null
+        setEditorFocused(true)
+      }
+    }
+    const updateAfterFocus = (): void => {
+      if (frame !== null) window.cancelAnimationFrame(frame)
+      frame = window.requestAnimationFrame(update)
+    }
+    targets.card.addEventListener('focusin', handleFocusIn)
+    targets.card.addEventListener('focusout', updateAfterFocus)
+    update()
+    return () => {
+      if (frame !== null) window.cancelAnimationFrame(frame)
+      targets.card.removeEventListener('focusin', handleFocusIn)
+      targets.card.removeEventListener('focusout', updateAfterFocus)
+    }
+  }, [targets])
+
   useLayoutEffect(() => {
     if (targets === null) return
     return () => { clearFloatingStyles(targets) }
@@ -254,8 +325,8 @@ export function InputAnywhereControls(): ReactElement {
       commitLayout(normalized)
       return
     }
-    applyFloatingStyles(targets, normalized)
-  }, [layout, targets])
+    applyFloatingStyles(targets, normalized, { preferences, inputActive })
+  }, [inputActive, layout, preferences, targets])
 
   useEffect(() => {
     const timer = window.setTimeout(() => { persistLayout(layout) }, 120)
@@ -289,7 +360,9 @@ export function InputAnywhereControls(): ReactElement {
 
   useEffect(() => {
     if (targets === null || layout.mode === 'docked') return
+    let normalizeFrame: number | null = null
     const normalize = (): void => {
+      normalizeFrame = null
       const current = layoutRef.current
       if (current.mode === 'docked') return
       if (hasFixedContainingBlock(targets.seat)) {
@@ -306,11 +379,32 @@ export function InputAnywhereControls(): ReactElement {
         minimumCardHeight(targets),
       )
       if (!sameLayout(current, next)) commitLayout(next)
-      else applyFloatingStyles(targets, next)
+      else applyFloatingStyles(targets, next, { preferences, inputActive })
     }
-    const observer = new ResizeObserver(normalize)
+    const scheduleNormalize = (): void => {
+      if (normalizeFrame !== null) return
+      normalizeFrame = window.requestAnimationFrame(normalize)
+    }
+    const observer = new ResizeObserver(scheduleNormalize)
     observer.observe(targets.root)
     observer.observe(targets.seat)
+
+    const observedFlows = new Set<HTMLElement>()
+    const syncObservedFlows = (): void => {
+      const currentFlows = new Set(targets.scroller.querySelectorAll<HTMLElement>('[data-chat-flow]'))
+      for (const flow of observedFlows) {
+        if (currentFlows.has(flow)) continue
+        observer.unobserve(flow)
+        observedFlows.delete(flow)
+      }
+      for (const flow of currentFlows) {
+        if (observedFlows.has(flow)) continue
+        observer.observe(flow)
+        observedFlows.add(flow)
+      }
+    }
+    syncObservedFlows()
+
     // Fixed card height hides intrinsic growth, so each normal child must be observed.
     const observedChildren = new Set<HTMLElement>()
     const syncObservedChildren = (): void => {
@@ -331,33 +425,70 @@ export function InputAnywhereControls(): ReactElement {
     syncObservedChildren()
     const mutations = new MutationObserver(() => {
       syncObservedChildren()
-      normalize()
+      scheduleNormalize()
     })
-    mutations.observe(targets.card, { childList: true, subtree: true })
+    mutations.observe(targets.card, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['style', 'class'],
+    })
+
+    const containsChatFlow = (node: Node): boolean => node instanceof Element
+      && (node.matches('[data-chat-flow]') || node.querySelector('[data-chat-flow]') !== null)
+    const flowMutations = new MutationObserver((records) => {
+      const relevant = records.some((record) => {
+        if (record.type === 'attributes') {
+          if (!(record.target instanceof Element)) return false
+          if (record.attributeName === 'data-chat-flow') {
+            return record.oldValue !== null || record.target.matches('[data-chat-flow]')
+          }
+          return record.target.matches('[data-chat-flow]')
+            || record.target.querySelector('[data-chat-flow]') !== null
+        }
+        return Array.from(record.addedNodes).some(containsChatFlow)
+          || Array.from(record.removedNodes).some(containsChatFlow)
+      })
+      if (!relevant) return
+      syncObservedFlows()
+      scheduleNormalize()
+    })
+    flowMutations.observe(targets.scroller, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeOldValue: true,
+      attributeFilter: ['data-chat-flow', 'hidden', 'style', 'class'],
+    })
+
     // Theme extensions commonly write inherited surface tokens on body or a shell ancestor.
-    const appearanceMutations = new MutationObserver(normalize)
+    const appearanceMutations = new MutationObserver(scheduleNormalize)
     for (let ancestor = targets.seat.parentElement; ancestor !== null; ancestor = ancestor.parentElement) {
       appearanceMutations.observe(ancestor, {
         attributes: true,
         attributeFilter: ['style', 'class', 'data-ds-dark-theme'],
       })
     }
-    window.addEventListener('resize', normalize)
-    window.addEventListener('orientationchange', normalize)
-    window.addEventListener('transitionend', normalize)
-    window.visualViewport?.addEventListener('resize', normalize)
-    window.visualViewport?.addEventListener('scroll', normalize)
+    window.addEventListener('resize', scheduleNormalize)
+    window.addEventListener('orientationchange', scheduleNormalize)
+    window.addEventListener('transitionend', scheduleNormalize)
+    targets.scroller.addEventListener('scroll', scheduleNormalize, { passive: true })
+    window.visualViewport?.addEventListener('resize', scheduleNormalize)
+    window.visualViewport?.addEventListener('scroll', scheduleNormalize)
     return () => {
+      if (normalizeFrame !== null) window.cancelAnimationFrame(normalizeFrame)
       observer.disconnect()
       mutations.disconnect()
+      flowMutations.disconnect()
       appearanceMutations.disconnect()
-      window.removeEventListener('resize', normalize)
-      window.removeEventListener('orientationchange', normalize)
-      window.removeEventListener('transitionend', normalize)
-      window.visualViewport?.removeEventListener('resize', normalize)
-      window.visualViewport?.removeEventListener('scroll', normalize)
+      window.removeEventListener('resize', scheduleNormalize)
+      window.removeEventListener('orientationchange', scheduleNormalize)
+      window.removeEventListener('transitionend', scheduleNormalize)
+      targets.scroller.removeEventListener('scroll', scheduleNormalize)
+      window.visualViewport?.removeEventListener('resize', scheduleNormalize)
+      window.visualViewport?.removeEventListener('scroll', scheduleNormalize)
     }
-  }, [layout.mode, targets])
+  }, [inputActive, layout.mode, preferences, targets])
 
   const floatingFromDom = (): FloatingLayout | null => {
     if (targets === null || hasFixedContainingBlock(targets.seat)) return null
@@ -546,9 +677,9 @@ export function InputAnywhereControls(): ReactElement {
       <button
         type="button"
         className="dsh-input-anywhere-button"
-        aria-label="Move input"
+        aria-label={t('moveInput')}
         aria-pressed={layout.mode === 'floating'}
-        title="Move input"
+        title={t('moveInput')}
         onClick={() => {
           const next = floatingFromDom()
           if (next !== null && layoutRef.current.mode === 'docked') commitLayout(next)
@@ -575,8 +706,8 @@ export function InputAnywhereControls(): ReactElement {
         type="button"
         className="dsh-input-anywhere-button"
         data-action="reset"
-        aria-label="Reset input position"
-        title="Reset input position"
+        aria-label={t('resetPosition')}
+        title={t('resetPosition')}
         onClick={reset}
       >
         <IconRefreshOutline16 size={16} />

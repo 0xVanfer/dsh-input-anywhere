@@ -19,11 +19,12 @@
 `tests/dom.test.ts` runs under Happy DOM and covers:
 
 - conversation/Visual Viewport intersection and narrow-column fallback;
-- extension and attachment rows in minimum-height measurement;
+- extension and attachment border boxes plus vertical margins in minimum-height measurement;
 - absolute overlay exclusion;
 - leading/trailing toolbar discovery without model-owner guessing;
 - scoped application and removal of floating markers and custom properties;
-- translucent inherited surface detection for card/dock/menu layers, opaque-theme fallback, and opacity ownership.
+- inherited surface resolution across hex, legacy RGB/HSL, modern CSS color functions, named-color fallback, and opaque themes;
+- positive-area `[data-chat-flow]` overlap, hidden/edge-touch rejection, idle theme preservation, input-active overrides, and independent surface/control modes.
 
 ### React integration tests
 
@@ -39,12 +40,19 @@
 - explicit pointer-capture cleanup on Escape and unmount;
 - transformed-shell fail-closed behavior;
 - live appearance-token updates and runtime blur/filter docking;
-- denied storage;
+- master-switch unmount and full floating-style cleanup;
+- official draft plus textarea-focus input state driving overlap alpha;
+- chat-flow insertion/removal after floating and one-frame coalescing of event/observer bursts;
+- denied layout storage;
 - missing-marker behavior and lifecycle cleanup.
+
+### Preference and settings UI tests
+
+`tests/preferences.test.ts` validates default filling, numeric clamping, stable snapshots, write-ahead journaling, confirmed Host writes/unsets, resolve-without-commit recovery, partial migration progress, revision-conflict retry, offline reset replay, migration/reset serialization, disposal during a blocked write, and browser-storage getter/setter/removal failures. `tests/settings.test.tsx` exercises the dedicated settings section, mode-dependent controls, reset, read-only Host snapshots, page-only memory fallback, and failed-write reporting.
 
 ### Browser integration and CSS tests
 
-`tests/browser/client-runtime.spec.ts` loads the built lazy-CJS Client package through a minimal `window.__ModuleLoader__`, mounts the registered React component in Chromium, and verifies Slot activation, DOM discovery, floating projection, live theme inheritance, marker removal/rebinding, pointer-capture cancellation, and lifecycle disposal.
+`tests/browser/client-runtime.spec.ts` loads the built lazy-CJS Client package through a minimal `window.__ModuleLoader__`, starts with an unavailable Host settings scope, mounts the registered React component in Chromium, and verifies browser fallback activation, exact idle theme alpha, input-focus alpha, DOM discovery, floating projection, marker removal/rebinding, pointer-capture cancellation, and lifecycle disposal.
 
 `tests/browser/responsive.spec.ts` uses a focused composer fixture for CSS behavior that DOM emulators cannot reliably implement:
 
@@ -63,7 +71,7 @@ The browser tests do not require a running DSH process and do not modify a real 
 
 `scripts/verify-bundle.mjs` executes the generated artifacts:
 
-- imports the Host export and checks its inert contract;
+- imports the Host export and verifies optional settings injection plus namespace/schema registration;
 - evaluates Client registration in a VM `ModuleLoader` context;
 - executes the Client factory with real declared externals;
 - verifies the exact external set;
@@ -123,7 +131,8 @@ Before a release, install the packed tarball into a clean Web profile and verify
 | Responsive | 320, 390, 768, and 1440 px; sidebar/details open and closed; 200% zoom |
 | Viewport | Portrait/landscape, Visual Viewport pan, soft keyboard |
 | Layers | Settings modal, menus, tooltips, notices, overlays |
-| Persistence | Reload immediately after move, resize, and reset; denied/corrupt storage |
+| Settings | Host-backed write/reset, Client-only fallback, fallback migration, theme/custom/opaque modes, idle/input overlap modes |
+| Persistence | Reload immediately after move, resize, and reset; denied/corrupt layout and preference storage |
 | Lifecycle | Stop, update, HMR, remount, and package removal |
 
 Record DSH, browser, OS, and extension versions in the release notes.

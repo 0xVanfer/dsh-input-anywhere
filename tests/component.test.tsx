@@ -3,6 +3,8 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { InputAnywhereControls } from '../src/client/InputAnywhereControls.tsx'
+import { DEFAULT_PREFERENCES, type InputAnywherePreferences } from '../src/preferences-contract.ts'
+import type { PreferenceSnapshot, PreferenceStore } from '../src/client/preferences.ts'
 
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
   IconRefreshOutline16: () => null,
@@ -55,6 +57,42 @@ class ResizeObserverStub {
       if (!observer.observed.has(target)) continue
       observer.callback([{ target } as ResizeObserverEntry], observer as unknown as ResizeObserver)
     }
+  }
+}
+
+class ComponentPreferenceStore implements PreferenceStore {
+  private listeners = new Set<() => void>()
+  private snapshot: PreferenceSnapshot
+
+  constructor(preferences: InputAnywherePreferences = { ...DEFAULT_PREFERENCES }) {
+    this.snapshot = { preferences, status: 'ready', writable: true, persistence: 'host' }
+  }
+
+  getSnapshot = (): PreferenceSnapshot => this.snapshot
+  subscribe = (listener: () => void): (() => void) => {
+    this.listeners.add(listener)
+    return () => { this.listeners.delete(listener) }
+  }
+
+  async set<K extends keyof InputAnywherePreferences>(field: K, value: InputAnywherePreferences[K]): Promise<void> {
+    this.update({ [field]: value })
+  }
+
+  async reset(): Promise<void> {
+    this.snapshot = { ...this.snapshot, preferences: { ...DEFAULT_PREFERENCES } }
+    this.publish()
+  }
+
+  update(patch: Partial<InputAnywherePreferences>): void {
+    this.snapshot = {
+      ...this.snapshot,
+      preferences: { ...this.snapshot.preferences, ...patch },
+    }
+    this.publish()
+  }
+
+  private publish(): void {
+    for (const listener of this.listeners) listener()
   }
 }
 
@@ -172,6 +210,115 @@ afterEach(() => {
 })
 
 describe('InputAnywhereControls integration', () => {
+  it('unmounts all floating behavior when the durable feature switch is disabled', async () => {
+    const fixture = createFixture()
+    const store = new ComponentPreferenceStore({ ...DEFAULT_PREFERENCES, enabled: false })
+    const view = render(<InputAnywhereControls preferences={store} />, { container: fixture.mount })
+    expect(view.queryByRole('button', { name: 'Move input' })).toBeNull()
+
+    act(() => { store.update({ enabled: true }) })
+    fireEvent.click(await view.findByRole('button', { name: 'Move input' }))
+    expect(fixture.seat.hasAttribute('data-input-anywhere-floating')).toBe(true)
+
+    act(() => { store.update({ enabled: false }) })
+    await waitFor(() => {
+      expect(view.queryByRole('button', { name: 'Move input' })).toBeNull()
+      expect(fixture.seat.hasAttribute('data-input-anywhere-floating')).toBe(false)
+      expect(fixture.scroller.hasAttribute('data-input-anywhere-floating-host')).toBe(false)
+      expect(JSON.parse(window.localStorage.getItem('dsh-input-anywhere:layout:v1') ?? '{}'))
+        .toMatchObject({ layout: { mode: 'docked' } })
+    })
+
+    act(() => { store.update({ enabled: true }) })
+    const restoredMove = await view.findByRole('button', { name: 'Move input' })
+    expect(restoredMove.getAttribute('aria-pressed')).toBe('false')
+    expect(fixture.seat.hasAttribute('data-input-anywhere-floating')).toBe(false)
+  })
+
+  it('uses output overlap plus official draft or editor focus for adaptive alpha', async () => {
+    const fixture = createFixture()
+    const flow = document.createElement('div')
+    flow.dataset.chatFlow = ''
+    fixture.scroller.prepend(flow)
+    setRect(flow, rect(0, 0, 1000, 700))
+    fixture.card.style.setProperty('--dsw-alias-bg-layer-1', 'rgba(10, 20, 30, 0.3)')
+    fixture.card.style.setProperty('--dsw-alias-bg-layer-2', 'rgba(40, 50, 60, 0.4)')
+    const store = new ComponentPreferenceStore()
+    const view = render(
+      <InputAnywhereControls preferences={store} input={{ draft: '' }} />,
+      { container: fixture.mount },
+    )
+    fireEvent.click(view.getByRole('button', { name: 'Move input' }))
+    expect(fixture.seat.style.getPropertyValue('--dsh-input-anywhere-surface'))
+      .toBe('rgba(10, 20, 30, 0.3)')
+    expect(fixture.seat.style.getPropertyValue('--dsh-input-anywhere-controls-opacity')).toBe('0.3')
+
+    view.rerender(<InputAnywhereControls preferences={store} input={{ draft: 'working' }} />)
+    expect(fixture.seat.style.getPropertyValue('--dsh-input-anywhere-surface'))
+      .toBe('rgba(10, 20, 30, 0.92)')
+
+    view.rerender(<InputAnywhereControls preferences={store} input={{ draft: '' }} />)
+    const editor = fixture.card.querySelector('textarea')
+    if (editor === null) throw new Error('fixture textarea missing')
+    fireEvent.focusIn(editor)
+    await waitFor(() => {
+      expect(fixture.seat.style.getPropertyValue('--dsh-input-anywhere-surface'))
+        .toBe('rgba(10, 20, 30, 0.92)')
+    })
+  })
+
+  it('rebinds overlap measurement when chat flow is added or removed after floating', async () => {
+    const fixture = createFixture()
+    fixture.card.style.setProperty('--dsw-alias-bg-layer-1', 'rgba(10, 20, 30, 0.3)')
+    fixture.card.style.setProperty('--dsw-alias-bg-layer-2', 'rgba(40, 50, 60, 0.4)')
+    const store = new ComponentPreferenceStore()
+    const view = render(
+      <InputAnywhereControls preferences={store} input={{ draft: 'working' }} />,
+      { container: fixture.mount },
+    )
+    fireEvent.click(view.getByRole('button', { name: 'Move input' }))
+    expect(fixture.seat.style.getPropertyValue('--dsh-input-anywhere-surface'))
+      .toBe('rgba(10, 20, 30, 0.3)')
+
+    const flow = document.createElement('div')
+    flow.dataset.chatFlow = ''
+    setRect(flow, rect(0, 0, 1000, 700))
+    fixture.scroller.prepend(flow)
+    await waitFor(() => {
+      expect(fixture.seat.style.getPropertyValue('--dsh-input-anywhere-surface'))
+        .toBe('rgba(10, 20, 30, 0.92)')
+      expect(Array.from(ResizeObserverStub.instances).some(observer => observer.observed.has(flow))).toBe(true)
+    })
+
+    flow.remove()
+    await waitFor(() => {
+      expect(fixture.seat.style.getPropertyValue('--dsh-input-anywhere-surface'))
+        .toBe('rgba(10, 20, 30, 0.3)')
+      expect(Array.from(ResizeObserverStub.instances).some(observer => observer.observed.has(flow))).toBe(false)
+    })
+  })
+
+  it('coalesces geometry notifications into one animation frame', async () => {
+    const fixture = createFixture()
+    const view = render(<InputAnywhereControls />, { container: fixture.mount })
+    fireEvent.click(view.getByRole('button', { name: 'Move input' }))
+    await new Promise<void>(resolve => { window.requestAnimationFrame(() => { resolve() }) })
+
+    const callbacks: FrameRequestCallback[] = []
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      callbacks.push(callback)
+      return callbacks.length
+    })
+    fixture.scroller.dispatchEvent(new Event('scroll'))
+    fixture.scroller.dispatchEvent(new Event('scroll'))
+    window.dispatchEvent(new Event('resize'))
+    window.dispatchEvent(new Event('transitionend'))
+    expect(callbacks).toHaveLength(1)
+
+    act(() => { callbacks[0]?.(performance.now()) })
+    expect(callbacks).toHaveLength(1)
+  })
+
   it('moves the whole native seat while preserving third-party contributors', async () => {
     const fixture = createFixture()
     const view = render(<InputAnywhereControls />, { container: fixture.mount })
@@ -454,9 +601,9 @@ describe('InputAnywhereControls integration', () => {
     })
     await waitFor(() => {
       expect(fixture.seat.style.getPropertyValue('--dsh-input-anywhere-surface'))
-        .toBe('var(--dsw-alias-bg-layer-1)')
+        .toBe('hsla(220, 20%, 20%, 0.42)')
       expect(fixture.seat.style.getPropertyValue('--dsh-input-anywhere-menu-surface'))
-        .toBe('var(--dsw-alias-bg-layer-2)')
+        .toBe('hsla(220, 20%, 24%, 0.48)')
       expect(fixture.seat.hasAttribute('data-input-anywhere-themed')).toBe(true)
     })
 

@@ -18,7 +18,25 @@ function check(label, condition) {
 }
 
 check('host exports package name', host.name === 'dsh-input-anywhere')
-check('host exports inert apply function', typeof host.apply === 'function' && host.apply() === undefined)
+let hostInject
+let registeredNamespace
+let registeredSchema
+host.apply({
+  inject(dependencies, callback) {
+    hostInject = dependencies
+    callback({
+      settings: {
+        register(namespace, schema) {
+          registeredNamespace = namespace
+          registeredSchema = schema
+        },
+      },
+    })
+  },
+})
+check('host waits for the optional settings service', JSON.stringify(hostInject) === JSON.stringify(['settings']))
+check('host registers its durable settings namespace', registeredNamespace === 'dsh-input-anywhere'
+  && registeredSchema === host.InputAnywherePreferencesSchema)
 
 let registration
 const styleTags = []
@@ -68,7 +86,13 @@ const client = registration.factory((name) => {
   return nativeRequire(name)
 })
 check('client factory returns apply', typeof client.apply === 'function')
-check('client declares slots injection', Array.isArray(client.inject) && client.inject.length === 1 && client.inject[0] === 'slots')
+check('client declares settings, locale, transport, and slots services', JSON.stringify(client.inject) === JSON.stringify([
+  'slots',
+  'locale',
+  'connection',
+  'remote',
+  'settingsScope',
+]))
 check('client external set is deliberate', JSON.stringify(externalNames.sort()) === JSON.stringify([
   '@deepseek-ai/dsh-client-ui-primitives',
   'react',
@@ -76,39 +100,81 @@ check('client external set is deliberate', JSON.stringify(externalNames.sort()) 
   'react/jsx-runtime',
 ].sort()))
 
-let effectLabel
-let injectedSlot
-let slotOptions
-let slotComponent
+const effectLabels = []
+const injectedSlots = []
+const registrations = []
 const effectDisposers = []
+let boundSettingsNamespace
+let registeredLocale
+const settingsSnapshot = {
+  status: 'ready',
+  value: undefined,
+  base: undefined,
+  user: undefined,
+  revision: 0,
+  writable: true,
+  mode: 'host',
+}
 const fakeContext = {
   effect(effect, label) {
-    effectLabel = label
+    effectLabels.push(label)
     const dispose = effect()
     if (typeof dispose === 'function') effectDisposers.push(dispose)
   },
+  locale: {
+    register(namespace) {
+      registeredLocale = namespace
+      return () => {}
+    },
+    bind() {
+      return key => key
+    },
+  },
+  settingsScope: {
+    bind({ namespace }) {
+      boundSettingsNamespace = namespace
+      return {
+        getSnapshot: () => settingsSnapshot,
+        subscribe: () => () => {},
+        set: async () => {},
+        unset: async () => {},
+      }
+    },
+  },
   slots: {
     inject(name, register) {
-      injectedSlot = name
-      register()
+      injectedSlots.push(name)
+      return register()
     },
     register(options, component) {
-      slotOptions = options
-      slotComponent = component
+      registrations.push({ options, component })
       return () => {}
     },
   },
 }
 client.apply(fakeContext)
-check('client owns its style effect', effectLabel === 'input-anywhere: styles')
+check('client owns style and locale effects', effectLabels.includes('input-anywhere: styles')
+  && effectLabels.includes('input-anywhere: dictionaries'))
 check('client installs exactly one labeled stylesheet', styleTags.length === 1
   && styleTags[0]?.dataset.plugin === 'dsh-input-anywhere'
   && styleTags[0]?.dataset.pluginCss === 'dsh-input-anywhere/client'
   && styleTags[0]?.textContent.includes('.dsh-input-anywhere-seat'))
-check('client waits for the additive input slot', injectedSlot === 'conversation.input.left')
-check('client registers a unique ordered Slot item', slotOptions?.name === 'conversation.input.left'
-  && slotOptions?.id === 'input-anywhere'
-  && slotOptions?.order === 90)
-check('client registers a renderable control component', typeof slotComponent === 'function')
+check('client registers its locale and binds the durable namespace', registeredLocale === 'input-anywhere'
+  && boundSettingsNamespace === 'dsh-input-anywhere')
+check('client waits for settings and additive input slots', JSON.stringify(injectedSlots) === JSON.stringify([
+  'settings.section',
+  'conversation.input.left',
+]))
+const settingsRegistration = registrations.find(entry => entry.options.name === 'settings.section')
+const inputRegistration = registrations.find(entry => entry.options.name === 'conversation.input.left')
+check('client registers a dedicated ordered settings section', settingsRegistration?.options.id === 'input-anywhere'
+  && settingsRegistration?.options.order === 36
+  && typeof settingsRegistration?.component === 'function')
+check('client registers a unique ordered Slot control', inputRegistration?.options.id === 'input-anywhere'
+  && inputRegistration?.options.order === 90
+  && typeof inputRegistration?.component === 'function')
+check('both Slot entries receive the shared preference store', typeof settingsRegistration?.options.inject === 'function'
+  && typeof inputRegistration?.options.inject === 'function'
+  && settingsRegistration.options.inject().preferences === inputRegistration.options.inject().preferences)
 for (const dispose of effectDisposers.reverse()) dispose()
 check('client style effect disposes its stylesheet', styleTags.length === 0)
