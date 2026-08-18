@@ -114,7 +114,7 @@ pnpm verify:package "./artifacts/dsh-input-anywhere-${PACKAGE_VERSION}.tgz"
 
 ## Package-format note
 
-`publint` reports that `exports["./client"].default` points to CommonJS-style code in a `.js` file inside a `type: module` package. This is intentional: DSH Client packages use the `.js` path as a browser-only lazy-CJS script consumed by `window.__ModuleLoader__`, not by the Node ESM loader. The package follows the same `./client` export convention as the verified DSH `0.1.0-rc.6` packages. Bundle execution is covered by `scripts/verify-bundle.mjs` instead of changing the file to `.cjs`.
+`publint` reports that `exports["./client"].default` points to CommonJS-style code in a `.js` file inside a `type: module` package. This is intentional: DSH Client packages use the `.js` path as a browser-only lazy-CJS script consumed by `window.__ModuleLoader__`, not by the Node ESM loader. The package follows the same `./client` export convention as the verified DSH `0.1.0-rc.7` packages. Bundle execution is covered by `scripts/verify-bundle.mjs` instead of changing the file to `.cjs`.
 
 ## Manual DSH smoke matrix
 

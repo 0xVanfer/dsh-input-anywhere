@@ -68,7 +68,7 @@ This decision should be revisited if the feature grows to include rotation, arbi
 
 ## DSH-specific source of truth
 
-The implementation was checked against the live DSH `conversation.input.left` Slot contract and the installed `0.1.0-rc.6` Web packages. Source review covered the native conversation Todo and Queue docks, `dsh-client-ui-goal`, `dsh-client-ui-subagent`, and `dsh-client-ui-jobs`; it established the marker, toolbar, Slot ownership, and surface-token assumptions documented in [compatibility.md](compatibility.md).
+The implementation was checked against the live DSH `conversation.input.left` Slot contract and the installed `0.1.0-rc.6` and `0.1.0-rc.7` Web packages. Source review covered the native conversation Todo and Queue docks, `dsh-client-ui-goal`, `dsh-client-ui-subagent`, and `dsh-client-ui-jobs`; it established the marker, toolbar, Slot ownership, and surface-token assumptions documented in [compatibility.md](compatibility.md).
 
 Inspect data is used only to confirm contracts. Runtime behavior uses the real Slot and rendered native composer; the plugin does not cache Inspect output or serialize live DSH objects.
 

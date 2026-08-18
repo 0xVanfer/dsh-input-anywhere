@@ -4,7 +4,7 @@
 
 [English](README.md)
 
-> **发布状态：** 当前源码和 Changelog 已按 DeepSeek Harness `0.1.0-rc.6` 准备为 `v0.1.1`；在该版本发布到 npm 前，`latest` 仍为 `0.1.0`。插件同时依赖 Slot 契约和少量当前稳定的 composer DOM marker。用于其他 DSH 版本或替换 composer 前，请阅读[兼容性契约](docs/compatibility.md)。
+> **发布状态：** 当前源码和 Changelog 已按 DeepSeek Harness `0.1.0-rc.7` 准备为 `v0.1.1`；在该版本发布到 npm 前，`latest` 仍为 `0.1.0`。插件同时依赖 Slot 契约和少量当前稳定的 composer DOM marker。用于其他 DSH 版本或替换 composer 前，请阅读[兼容性契约](docs/compatibility.md)。
 
 ## 工作方式
 
@@ -16,6 +16,26 @@
 - 附件、accessory、notice、队列和 steering；
 - 权限、Plan、模型、上下文、发送和停止控件；
 - `conversation.input.left/right/dock` 与 `conversation.composer.dock` 扩展贡献。
+
+## 使用效果
+
+### 不遮挡正在阅读的回答
+
+把原生输入框放到长回答旁边，而不是压住正在阅读的段落。草稿、模型控件和完整对话仍由 DSH 原生树管理。
+
+![放在可读发布计划旁边的紧凑原生输入框](docs/screenshots/showcase-beside-output.png)
+
+### 给长输入留出空间
+
+把同一个输入框纵向扩展，并移动到对话另一侧。回答保持可见，草稿也获得足够的编辑空间。
+
+![放在发布计划兼容性章节旁边的纵向原生输入框](docs/screenshots/showcase-focused-draft.png)
+
+### 融入当前工作区
+
+输入框继承主题表面，可以自然进入自定义 DSH 工作区，而不接管背景插件，也不替换编辑器。
+
+![移动到 any-background 自定义工作区中的输入框](docs/screenshots/showcase-themed-workspace.jpg)
 
 ## 已验证能力
 
@@ -38,7 +58,7 @@
 
 | 组件 | 状态 |
 | --- | --- |
-| DeepSeek Harness `0.1.0-rc.6` | 已验证 |
+| DeepSeek Harness `0.1.0-rc.6` 和 `0.1.0-rc.7` | 已验证 |
 | Cordis `4.0.1` | 已验证 |
 | React / React DOM 18 | 已通过 DSH Web profile 验证 |
 | Chromium 细指针 | Playwright 自动化覆盖 |

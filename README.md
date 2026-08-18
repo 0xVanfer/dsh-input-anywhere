@@ -7,7 +7,7 @@ Move and resize the native DeepSeek Harness Web composer without replacing its i
 
 [简体中文](README.zh-CN.md)
 
-> **Release status:** the source and changelog are prepared for `v0.1.1` on DeepSeek Harness `0.1.0-rc.6`; npm `latest` remains `0.1.0` until that release is published. The plugin relies on documented Slot contracts and a small set of currently stable composer DOM markers. Review the [compatibility contract](docs/compatibility.md) before using it with another DSH release or a replacement composer.
+> **Release status:** the source and changelog are prepared for `v0.1.1` on DeepSeek Harness `0.1.0-rc.7`; npm `latest` remains `0.1.0` until that release is published. The plugin relies on documented Slot contracts and a small set of currently stable composer DOM markers. Review the [compatibility contract](docs/compatibility.md) before using it with another DSH release or a replacement composer.
 
 ## Overview
 
@@ -19,6 +19,26 @@ The plugin deliberately does **not** create another textarea and does not replac
 - attachments, accessories, notices, queue and steering controls;
 - permission, plan, model, context, send, and stop controls;
 - `conversation.input.left`, `conversation.input.right`, `conversation.input.dock`, and `conversation.composer.dock` contributions.
+
+## In Use
+
+### Keep the answer visible
+
+Move the native composer beside a long response instead of covering the paragraph you are reading. Draft state, model controls, and the full conversation remain where DSH owns them.
+
+![A compact native composer placed beside a readable launch brief](docs/screenshots/showcase-beside-output.png)
+
+### Make room to write
+
+Resize the same composer into a focused writing surface and place it on the other side of the conversation. The answer stays visible while the draft gets the space it needs.
+
+![A tall native composer beside the compatibility section of a launch brief](docs/screenshots/showcase-focused-draft.png)
+
+### Fit the workspace
+
+Theme inheritance lets the composer settle into customized DSH workspaces without taking over the background plugin or replacing the editor.
+
+![A moved composer in a customized any-background workspace](docs/screenshots/showcase-themed-workspace.jpg)
 
 ## Verified Behavior
 
@@ -41,7 +61,7 @@ The plugin deliberately does **not** create another textarea and does not replac
 
 | Component | Status |
 | --- | --- |
-| DeepSeek Harness `0.1.0-rc.6` | Verified |
+| DeepSeek Harness `0.1.0-rc.6` and `0.1.0-rc.7` | Verified |
 | Cordis `4.0.1` | Verified |
 | React / React DOM 18 | Verified through the DSH Web profile |
 | Chromium, fine pointer | Automated Playwright coverage |
