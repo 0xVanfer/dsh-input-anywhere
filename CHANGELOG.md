@@ -10,6 +10,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - Revalidated the Slot contracts, composer marker hierarchy, and full test suite against DeepSeek Harness `0.1.0-rc.7`; updated the development dependency baseline without changing the rc.6-compatible peer range.
 - Replaced the engineering-evidence screenshot gallery with a concise three-scene product walkthrough, moving `dsh-any-background` configuration evidence into the compatibility contract.
+- Stabilized Happy DOM unit tests under Node 22 by supplying an origin-backed browser storage fixture.
+- Localized resize-control accessible names and tooltips in the English and Simplified Chinese dictionaries.
 
 ## [0.1.1] - 2026-08-17
 

@@ -31,7 +31,7 @@ The maintainer will acknowledge the report through the private advisory, investi
 
 ## Security model
 
-The plugin is a Client-side UI extension, not a security boundary. It can reposition the existing composer but does not change DSH authorization or submission policy. It performs no network requests and stores only layout geometry in browser `localStorage`.
+The plugin is a Client-side UI extension, not a security boundary. It can reposition the existing composer but does not change DSH authorization or submission policy. It performs no direct network requests. Browser storage contains layout geometry plus a write-ahead journal for the user preferences documented in the README; Host settings use the normal DSH settings transport.
 
 The most relevant security and privacy risks are:
 

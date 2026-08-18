@@ -4,7 +4,7 @@
 
 [English](README.md)
 
-> **发布状态：** 当前源码和 Changelog 已按 DeepSeek Harness `0.1.0-rc.7` 准备为 `v0.1.1`；在该版本发布到 npm 前，`latest` 仍为 `0.1.0`。插件同时依赖 Slot 契约和少量当前稳定的 composer DOM marker。用于其他 DSH 版本或替换 composer 前，请阅读[兼容性契约](docs/compatibility.md)。
+> **发布状态：** 当前版本为 `v0.1.1`，已通过 DeepSeek Harness `0.1.0-rc.6` 和 `0.1.0-rc.7` 验证。插件同时依赖 Slot 契约和少量当前稳定的 composer DOM marker。用于其他 DSH 版本或替换 composer 前，请阅读[兼容性契约](docs/compatibility.md)。
 
 ## 工作方式
 
@@ -76,7 +76,7 @@ Peer dependency 允许 `<0.2.0` 的兼容 DSH 版本，但这不表示所有版�
 dsh plugin --profile web add dsh-input-anywhere
 ```
 
-在 `0.1.1` 发布到 npm 前，该命令仍会安装 registry `latest`（`0.1.0`），而不是本仓库中已审计的源码版本。
+registry 包会安装已发布的 `0.1.1`。添加或删除插件后需要重启 Web profile，让 DSH 重新读取 manifest 和 Client 插件名册。
 
 本地仓库：
 
@@ -85,8 +85,6 @@ pnpm install
 pnpm check
 dsh plugin --profile web add /absolute/path/to/dsh-input-anywhere
 ```
-
-添加或删除插件后需要重启 Web profile。DSH 在进程启动时解析包 manifest 和 Client 插件名册。
 
 卸载：
 

@@ -30,6 +30,12 @@ export const zh = {
   saveError: '设置保存失败',
   moveInput: '移动输入框',
   resetPosition: '恢复输入框位置',
+  resizeInput: '从{corner}角缩放输入框，当前为 {width} x {height} 像素',
+  resizeInputTitle: '从{corner}角缩放输入框',
+  topLeft: '左上',
+  topRight: '右上',
+  bottomLeft: '左下',
+  bottomRight: '右下',
 } as const
 
 export const en: Record<keyof typeof zh, string> = {
@@ -62,6 +68,12 @@ export const en: Record<keyof typeof zh, string> = {
   saveError: 'Could not save settings',
   moveInput: 'Move input',
   resetPosition: 'Reset input position',
+  resizeInput: 'Resize input from {corner} corner. Current size: {width} by {height} pixels.',
+  resizeInputTitle: 'Resize input from {corner} corner',
+  topLeft: 'top-left',
+  topRight: 'top-right',
+  bottomLeft: 'bottom-left',
+  bottomRight: 'bottom-right',
 }
 
 export type InputAnywhereLocaleKey = keyof typeof zh

@@ -50,11 +50,11 @@ interface PointerInteraction {
 }
 
 const DIRECTIONS: readonly ResizeDirection[] = ['nw', 'ne', 'sw', 'se']
-const DIRECTION_LABELS: Record<ResizeDirection, string> = {
-  nw: 'top-left',
-  ne: 'top-right',
-  sw: 'bottom-left',
-  se: 'bottom-right',
+const DIRECTION_LABELS: Record<ResizeDirection, 'topLeft' | 'topRight' | 'bottomLeft' | 'bottomRight'> = {
+  nw: 'topLeft',
+  ne: 'topRight',
+  sw: 'bottomLeft',
+  se: 'bottomRight',
 }
 
 function loadLayout(): ComposerLayout {
@@ -721,8 +721,11 @@ function ActiveInputAnywhereControls({ preferences, t, draftActive }: {
           className="dsh-input-anywhere-resize"
           data-direction={direction}
           aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight"
-          aria-label={`Resize input from ${DIRECTION_LABELS[direction]} corner. ${layout.width} by ${layout.height} pixels.`}
-          title={`Resize input from ${DIRECTION_LABELS[direction]} corner`}
+          aria-label={t('resizeInput')
+            .replace('{corner}', t(DIRECTION_LABELS[direction]))
+            .replace('{width}', String(layout.width))
+            .replace('{height}', String(layout.height))}
+          title={t('resizeInputTitle').replace('{corner}', t(DIRECTION_LABELS[direction]))}
           onKeyDown={(event) => {
             growResize(event, direction)
             nudgeResize(event, direction)

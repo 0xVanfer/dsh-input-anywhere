@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { InputAnywhereControls } from '../src/client/InputAnywhereControls.tsx'
 import { DEFAULT_PREFERENCES, type InputAnywherePreferences } from '../src/preferences-contract.ts'
+import { zh } from '../src/client/locales.ts'
 import type { PreferenceSnapshot, PreferenceStore } from '../src/client/preferences.ts'
 
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
@@ -439,6 +440,16 @@ describe('InputAnywhereControls integration', () => {
       expect(fixture.seat.hasAttribute('data-input-anywhere-floating')).toBe(false)
     })
     expect(fixture.card.contains(fixture.rightExtension)).toBe(true)
+  })
+
+  it('localizes resize control names with the supplied dictionary', async () => {
+    const fixture = createFixture()
+    const view = render(<InputAnywhereControls t={key => zh[key]} />, { container: fixture.mount })
+    fireEvent.click(view.getByRole('button', { name: zh.moveInput }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /从右下角缩放输入框/ })).toBeDefined()
+    })
   })
 
   it('releases pointer capture when Escape resets an active drag', () => {

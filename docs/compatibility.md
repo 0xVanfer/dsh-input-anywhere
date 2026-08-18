@@ -2,7 +2,7 @@
 
 ## Tested baseline
 
-The published `0.1.0` release was tested against DeepSeek Harness `0.1.0-rc.6`. The audited `0.1.1` source is tested against:
+The published `0.1.1` release is tested against:
 
 | Dependency | Tested version |
 | --- | --- |

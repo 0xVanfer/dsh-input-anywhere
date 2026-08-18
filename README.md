@@ -7,7 +7,7 @@ Move and resize the native DeepSeek Harness Web composer without replacing its i
 
 [简体中文](README.zh-CN.md)
 
-> **Release status:** the source and changelog are prepared for `v0.1.1` on DeepSeek Harness `0.1.0-rc.7`; npm `latest` remains `0.1.0` until that release is published. The plugin relies on documented Slot contracts and a small set of currently stable composer DOM markers. Review the [compatibility contract](docs/compatibility.md) before using it with another DSH release or a replacement composer.
+> **Release status:** `v0.1.1` is the current release, tested against DeepSeek Harness `0.1.0-rc.6` and `0.1.0-rc.7`. The plugin relies on documented Slot contracts and a small set of currently stable composer DOM markers. Review the [compatibility contract](docs/compatibility.md) before using it with another DSH release or a replacement composer.
 
 ## Overview
 
@@ -79,9 +79,7 @@ The package peer range allows compatible DSH releases below `0.2.0`, but that ra
 dsh plugin --profile web add dsh-input-anywhere
 ```
 
-Until `0.1.1` is published to npm, this command installs registry `latest` (`0.1.0`) rather than the audited source release in this checkout.
-
-Restart the Web profile after adding or removing the package. DSH resolves package manifests and the Client plugin roster at process startup.
+The registry package resolves the published `0.1.1` release. Restart the Web profile after adding or removing the package so DSH reloads its manifest and Client roster.
 
 Remove the package with:
 
