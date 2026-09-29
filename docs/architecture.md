@@ -6,11 +6,11 @@ The plugin changes the location and dimensions of the existing DSH composer with
 
 ## Package composition
 
-- `src/index.ts`: Host registration for the durable `dsh-input-anywhere` settings schema.
+- `src/index.ts`: Host `Config` export declaring the live `dsh-input-anywhere` preference schema, plus the page claim that suppresses the schema-generated settings page.
 - `src/preferences-contract.ts`: shared preference types, defaults, field list, and defensive normalization.
-- `src/client/index.ts`: Client settings scope, locale, Slot registration, and lifecycle-owned stylesheet installation.
+- `src/client/index.ts`: Client config-form binding, locale, Slot registration, and lifecycle-owned stylesheet installation.
 - `src/client/InputAnywhereSettings.tsx`: dedicated `settings.section` controls.
-- `src/client/preferences.ts`: official `SettingsScope` adapter, browser fallback, and fallback-to-Host migration.
+- `src/client/preferences.ts`: adapter over the settings domain's shared `ConfigForm`.
 - `src/client/InputAnywhereControls.tsx`: React interaction controller, observers, layout persistence, and Slot UI.
 - `src/client/dom.ts`: composer DOM discovery, geometry adapters, overlap detection, extension measurement, and scoped style ownership.
 - `src/client/layout.ts`: pure layout persistence and geometry functions.
@@ -20,8 +20,8 @@ The production Client entry is bundled as DSH lazy-CJS and registers through `wi
 
 ## Runtime sequence
 
-1. The Host registers the `dsh-input-anywhere` schema when the optional settings service is available.
-2. The Client binds that namespace, installs its bilingual settings section, and exposes a browser-local writable fallback while Host settings are unavailable.
+1. The Host exports its `Config` schema and, once the settings service is available, claims the `dsh-input-anywhere` page so no schema-generated page is added beside it.
+2. The Client binds that namespace through `ctx.configForms.get('dsh-input-anywhere')`, adapts the shared form to the render snapshot, and installs its bilingual settings section.
 3. DSH renders the `conversation.input.left` contribution for a session when the master switch is enabled.
 4. The component discovers the nearest composer card, seat, conversation scroller, and phase root by stable data markers.
 5. Discovery is retried after child-tree and marker-attribute changes. If marker ancestors are replaced, pointer capture, pending target-specific animation frames, and the old target projection are cleaned before new targets are bound.
@@ -77,7 +77,12 @@ No `opacity` is applied to the complete seat, card, editor, or text. Control opa
 
 Layout uses the versioned `dsh-input-anywhere:layout:v1` record. Decode validates the version, mode, numeric fields, and optional anchor. Unknown or malformed values return the docked layout. Normal updates are debounced; completed pointer interactions and reset persist immediately, while `pagehide` and unmount flush the latest committed or animation-frame-pending layout.
 
-Preferences use the official Host `dsh-input-anywhere` settings namespace. The schema owns defaults and numeric bounds. Every online or fallback edit first enters the `dsh-input-anywhere:preferences:v1` write-ahead journal as a display snapshot plus per-field `set`/`unset` operations. The controller serializes mutations, then verifies each resolved `SettingsScope` call against the accepted `user`, `value`, and `revision` snapshot because the transport intentionally resolves after rejection recovery as well as success. Only confirmed operations are removed; a partial failure, revision conflict, or teardown preserves the remaining journal for retry. Untouched Host fields are never transferred, and reset is replayed as verified `unset` operations. If browser storage is blocked, the journal remains writable in memory and the settings page identifies it as page-only.
+Preferences are durable Host configuration. The Host `Config` export owns the schema, its defaults, the numeric opacity bounds, and the `volatile()` mark on every field; DSH merges edits into the plugin row's `config` in the active profile patch, so nothing else in the profile is restated and fields the user never touched keep their inherited values.
+
+The Client never talks to the settings transport directly. `ctx.configForms.get('dsh-input-anywhere')` returns the settings domain's shared form, and `src/client/preferences.ts` derives the render snapshot from it: the resolved value is normalized defensively, `status` and `writable` pass through, and `mode: 'memory'` becomes the page-only transport. A steady form snapshot reuses the derived object, which keeps `useSyncExternalStore` from re-rendering on unrelated ticks.
+
+Writes are one field at a time through `form.set`, and reset is a single atomic `form.mutate` of per-field `unset` operations so the form re-inherits every default under one revision fence. The shared controller owns revision fencing, ordered writes, and recovery reads; a refusal surfaces to the settings page as the save-error banner, and a new attempt clears it.
+
 
 ## Lifecycle ownership
 

@@ -1,3 +1,8 @@
+/**
+ * Settings namespace. The Host keys a preference form by the profile entry id,
+ * so this must equal the `id` of the row `cordis.patch.yml` inserts — which is
+ * why the package ships its row id as its own package name.
+ */
 export const SETTINGS_NAMESPACE = 'dsh-input-anywhere'
 
 export const SURFACE_MODES = ['theme', 'custom', 'opaque'] as const

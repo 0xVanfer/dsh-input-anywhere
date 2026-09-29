@@ -6,12 +6,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-28
+
 ### Changed
 
-- Revalidated the Slot contracts, composer marker hierarchy, and full test suite against DeepSeek Harness `0.1.0-rc.7`; updated the development dependency baseline without changing the rc.6-compatible peer range.
-- Replaced the engineering-evidence screenshot gallery with a concise three-scene product walkthrough, moving `dsh-any-background` configuration evidence into the compatibility contract.
+- **Breaking:** retargeted the plugin at DeepSeek Harness `0.1.7-rc.2`. Harness `0.1.0-rc.6`/`0.1.0-rc.7` are no longer supported; the `@deepseek-ai/dsh-client-runtime` package that owned the Client context and settings scope no longer exists.
+- The Host half now declares its preferences as a live `Config` schemastery export (`volatile()` per field) instead of calling the removed `settings.register(namespace, schema)` API, and claims its own settings page through `settings.configure({ auto: false })`.
+- The Client half reads and writes preferences through the settings domain's shared `ctx.configForms` service. The previous `ctx.settingsScope` adapter, its `localStorage` write-ahead journal, and its fallback-to-Host migration are replaced by the shared form's revision-fenced writes and Host recovery.
+- The Client `inject` list is now `['slots', 'locale', 'configForms']`; `connection` and `remote` are no longer dependencies. `dsh.client.inject` and the peer range were updated to the packages that still exist.
+- The composer draft now arrives through the session standard kit's `useInput` selector instead of a removed `input` owner prop.
+- The inserted row id is now `dsh-input-anywhere` (the package name), beside the unchanged display ids `input-anywhere`: the Host keys a preference form by profile entry id, so the row id is the settings namespace.
+- `IconRefreshOutline16` was replaced by the renamed `IconRefreshOutlineRegular` in the product icon set.
+- Revalidated the Slot contracts, composer marker hierarchy, and full test suite against the new Harness release and updated the dependency baseline.
 - Stabilized Happy DOM unit tests under Node 22 by supplying an origin-backed browser storage fixture.
 - Localized resize-control accessible names and tooltips in the English and Simplified Chinese dictionaries.
+
+### Removed
+
+- Browser-local preference persistence. Preferences are durable Host configuration in the profile patch layer, exactly like every other DSH plugin preference; a page that cannot reach the Host document now reports a read-only form instead of silently diverging. The three-scene product walkthrough replaced the former engineering-evidence screenshot gallery.
 
 ## [0.1.1] - 2026-08-17
 
@@ -56,6 +68,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Unit, DOM, React lifecycle, Chromium CSS, bundle-execution, and packaging checks.
 - English and Simplified Chinese project documentation.
 
-[Unreleased]: https://github.com/0xVanfer/dsh-input-anywhere/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/0xVanfer/dsh-input-anywhere/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/0xVanfer/dsh-input-anywhere/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/0xVanfer/dsh-input-anywhere/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/0xVanfer/dsh-input-anywhere/releases/tag/v0.1.0

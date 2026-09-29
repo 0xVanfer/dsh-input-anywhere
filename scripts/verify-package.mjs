@@ -90,13 +90,13 @@ try {
     && files.includes('cordis.patch.yml'))
   check('packed Client manifest targets the expected Web dependencies', packedJson.dsh?.client?.platform === 'web'
     && JSON.stringify(packedJson.dsh.client.inject) === JSON.stringify([
-      '@deepseek-ai/dsh-api-remotes',
-      '@deepseek-ai/dsh-client-connection',
       '@deepseek-ai/dsh-client-locale',
-      '@deepseek-ai/dsh-client-runtime',
       '@deepseek-ai/dsh-client-ui-conversation',
       '@deepseek-ai/dsh-client-ui-settings',
     ]))
+  check('packed peer ranges exclude the removed Client runtime package', packedJson.peerDependencies?.['@deepseek-ai/dsh-client-runtime'] === undefined
+    && packedJson.peerDependencies?.['@deepseek-ai/dsh-client-ui-settings'] === '>=0.1.7-rc.2 <0.2.0'
+    && packedJson.engines?.dsh === '>=0.1.7-rc.2 <0.2.0')
 
   const patch = await readFile(join(packageRoot, 'cordis.patch.yml'), 'utf8')
   const semanticPatch = patch.split('\n')
@@ -104,7 +104,7 @@ try {
     .join('\n')
   check('packed Cordis patch inserts only this package row', semanticPatch === [
     '- insert:',
-    '    - id: input-anywhere',
+    '    - id: dsh-input-anywhere',
     '      name: dsh-input-anywhere',
   ].join('\n'))
 
@@ -118,7 +118,7 @@ try {
     '--no-fund',
     '--legacy-peer-deps',
     '--package-lock=false',
-    '@deepseek-ai/cordis@^4.0.1',
+    '@deepseek-ai/cordis@^4.0.4',
     tarballPath,
   ], {
     cwd: consumer,

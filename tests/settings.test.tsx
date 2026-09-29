@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
-import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_PREFERENCES, type InputAnywherePreferences } from '../src/preferences-contract.ts'
 import { InputAnywhereSettings } from '../src/client/InputAnywhereSettings.tsx'
@@ -15,7 +15,7 @@ vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
     variant?: string
     size?: string
   } & ButtonHTMLAttributes<HTMLButtonElement>) => <button {...props}>{icon}{children}</button>,
-  IconRefreshOutline16: () => null,
+  IconRefreshOutlineRegular: () => null,
 }))
 
 const t: InputAnywhereTranslate = key => en[key]
@@ -90,32 +90,46 @@ describe('InputAnywhereSettings', () => {
     expect(store.resetCalls).toBe(1)
   })
 
-  it('disables writes when the settings transport is read-only', () => {
+  it('disables writes and reports a read-only Host settings document', () => {
     const store = new TestPreferenceStore({ ...DEFAULT_PREFERENCES }, false)
     render(<InputAnywhereSettings preferences={store} t={t} />)
 
+    expect(screen.getByText(en.readOnly)).toBeDefined()
     expect((screen.getByRole('switch', { name: en.enabled }) as HTMLInputElement).disabled).toBe(true)
     expect((screen.getByRole('button', { name: en.resetSettings }) as HTMLButtonElement).disabled).toBe(true)
   })
 
-  it('reports when fallback settings cannot persist beyond the page', () => {
-    const store = new TestPreferenceStore({ ...DEFAULT_PREFERENCES }, true, 'memory', 'local')
+  it('reports loading while the first Host section is still in flight', () => {
+    const store = new TestPreferenceStore({ ...DEFAULT_PREFERENCES }, false, 'host', 'loading')
+    render(<InputAnywhereSettings preferences={store} t={t} />)
+
+    expect(screen.getByText(en.loading)).toBeDefined()
+  })
+
+  it('reports a page that cannot reach the Host settings document', () => {
+    const store = new TestPreferenceStore({ ...DEFAULT_PREFERENCES }, false, 'memory', 'unavailable')
     render(<InputAnywhereSettings preferences={store} t={t} />)
 
     expect(screen.getByText(en.memoryOnly)).toBeDefined()
-    expect((screen.getByRole('switch', { name: en.enabled }) as HTMLInputElement).disabled).toBe(false)
+    expect((screen.getByRole('switch', { name: en.enabled }) as HTMLInputElement).disabled).toBe(true)
   })
 
-  it('surfaces a failed settings write and clears it after Host confirmation', async () => {
+  it('reports a Host that serves no section for this namespace', () => {
+    const store = new TestPreferenceStore({ ...DEFAULT_PREFERENCES }, false, 'host', 'unavailable')
+    render(<InputAnywhereSettings preferences={store} t={t} />)
+
+    expect(screen.getByText(en.unavailable)).toBeDefined()
+  })
+
+  it('surfaces a failed settings write and clears it after the next accepted write', async () => {
     const store = new TestPreferenceStore()
-    store.updateSnapshot({ status: 'local', persistence: 'browser' })
     vi.spyOn(store, 'set').mockRejectedValueOnce(new Error('write denied'))
     render(<InputAnywhereSettings preferences={store} t={t} />)
 
     fireEvent.click(screen.getByRole('switch', { name: en.enabled }))
     expect((await screen.findByRole('alert')).textContent).toBe(en.saveError)
 
-    act(() => { store.updateSnapshot({ status: 'ready', persistence: 'host' }) })
+    fireEvent.click(screen.getByRole('switch', { name: en.enabled }))
     await vi.waitFor(() => { expect(screen.queryByRole('alert')).toBeNull() })
   })
 })

@@ -48,11 +48,11 @@
 
 ### Preference and settings UI tests
 
-`tests/preferences.test.ts` validates default filling, numeric clamping, stable snapshots, write-ahead journaling, confirmed Host writes/unsets, resolve-without-commit recovery, partial migration progress, revision-conflict retry, offline reset replay, migration/reset serialization, disposal during a blocked write, and browser-storage getter/setter/removal failures. `tests/settings.test.tsx` exercises the dedicated settings section, mode-dependent controls, reset, read-only Host snapshots, page-only memory fallback, and failed-write reporting.
+`tests/preferences.test.ts` validates default filling, numeric clamping, stable derived snapshots, loading/unavailable/memory transport reporting, subscriber notification and unsubscription, single-field writes, refused writes, atomic reset operations, refused resets, and disposal. It drives a fixture that mirrors the shared `ConfigForm` contract. `tests/settings.test.tsx` exercises the dedicated settings section, mode-dependent controls, reset, the loading, read-only, page-only, and unserved-namespace states, and failed-write reporting with recovery on the next accepted write.
 
 ### Browser integration and CSS tests
 
-`tests/browser/client-runtime.spec.ts` loads the built lazy-CJS Client package through a minimal `window.__ModuleLoader__`, starts with an unavailable Host settings scope, mounts the registered React component in Chromium, and verifies browser fallback activation, exact idle theme alpha, input-focus alpha, DOM discovery, floating projection, marker removal/rebinding, pointer-capture cancellation, and lifecycle disposal.
+`tests/browser/client-runtime.spec.ts` loads the built lazy-CJS Client package through a minimal `window.__ModuleLoader__`, supplies a config-form stand-in that resolves defaults while the Host serves no section, mounts the registered React component in Chromium, and verifies default activation, exact idle theme alpha, input-focus alpha, DOM discovery, floating projection, marker removal/rebinding, pointer-capture cancellation, and lifecycle disposal.
 
 `tests/browser/responsive.spec.ts` uses a focused composer fixture for CSS behavior that DOM emulators cannot reliably implement:
 
@@ -71,7 +71,8 @@ The browser tests do not require a running DSH process and do not modify a real 
 
 `scripts/verify-bundle.mjs` executes the generated artifacts:
 
-- imports the Host export and verifies optional settings injection plus namespace/schema registration;
+- imports the Host export, resolves the ref envelope its `Config.toJSON()` returns, and verifies that every preference field is `volatile()` with a default;
+- verifies optional settings injection and that the schema-generated page is suppressed;
 - evaluates Client registration in a VM `ModuleLoader` context;
 - executes the Client factory with real declared externals;
 - verifies the exact external set;
@@ -114,7 +115,7 @@ pnpm verify:package "./artifacts/dsh-input-anywhere-${PACKAGE_VERSION}.tgz"
 
 ## Package-format note
 
-`publint` reports that `exports["./client"].default` points to CommonJS-style code in a `.js` file inside a `type: module` package. This is intentional: DSH Client packages use the `.js` path as a browser-only lazy-CJS script consumed by `window.__ModuleLoader__`, not by the Node ESM loader. The package follows the same `./client` export convention as the verified DSH `0.1.0-rc.7` packages. Bundle execution is covered by `scripts/verify-bundle.mjs` instead of changing the file to `.cjs`.
+`publint` reports that `exports["./client"].default` points to CommonJS-style code in a `.js` file inside a `type: module` package. This is intentional: DSH Client packages use the `.js` path as a browser-only lazy-CJS script consumed by `window.__ModuleLoader__`, not by the Node ESM loader. The package follows the same `./client` export convention as the verified DSH `0.1.7-rc.2` packages. Bundle execution is covered by `scripts/verify-bundle.mjs` instead of changing the file to `.cjs`.
 
 ## Manual DSH smoke matrix
 
@@ -131,8 +132,8 @@ Before a release, install the packed tarball into a clean Web profile and verify
 | Responsive | 320, 390, 768, and 1440 px; sidebar/details open and closed; 200% zoom |
 | Viewport | Portrait/landscape, Visual Viewport pan, soft keyboard |
 | Layers | Settings modal, menus, tooltips, notices, overlays |
-| Settings | Host-backed write/reset, Client-only fallback, fallback migration, theme/custom/opaque modes, idle/input overlap modes |
-| Persistence | Reload immediately after move, resize, and reset; denied/corrupt layout and preference storage |
+| Settings | Host-backed write/reset, read-only and unserved-namespace reporting, theme/custom/opaque modes, idle/input overlap modes |
+| Persistence | Reload immediately after move, resize, and reset; denied/corrupt layout storage; profile patch retains edits and untouched fields |
 | Lifecycle | Stop, update, HMR, remount, and package removal |
 
 Record DSH, browser, OS, and extension versions in the release notes.

@@ -9,7 +9,7 @@ import {
   type ReactElement,
 } from 'react'
 import { createPortal } from 'react-dom'
-import { IconRefreshOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconRefreshOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import { en, type InputAnywhereTranslate } from './locales.ts'
 import { defaultPreferenceStore, type PreferenceStore } from './preferences.ts'
 import {
@@ -76,21 +76,39 @@ function persistLayout(layout: ComposerLayout): void {
 export interface InputAnywhereControlsProps {
   preferences?: PreferenceStore
   t?: InputAnywhereTranslate
-  input?: { readonly draft: string }
+  /**
+   * Session standard kit selector over the input machine. The Slot always
+   * supplies it; the fallback keeps the component renderable in isolation.
+   */
+  useInput?: InputDraftSelector
 }
 
+/** Narrow view of the session standard kit hook this control needs. */
+export type InputDraftSelector = <Selected>(selector: (state: { readonly draft: string }) => Selected) => Selected
+
 const fallbackTranslate: InputAnywhereTranslate = key => en[key]
+
+/**
+ * Read the live draft. `useInput` is a stable hook per Session, so calling it
+ * from this wrapper keeps the hook order fixed across renders.
+ * @param useInput - session standard kit selector, absent outside a Slot.
+ * @returns the current draft text.
+ */
+function useDraft(useInput: InputDraftSelector | undefined): string {
+  return useInput === undefined ? '' : useInput(state => state.draft)
+}
 
 export function InputAnywhereControls({
   preferences = defaultPreferenceStore,
   t = fallbackTranslate,
-  input,
+  useInput,
 }: InputAnywhereControlsProps = {}): ReactElement | null {
   const snapshot = useSyncExternalStore(
     preferences.subscribe,
     preferences.getSnapshot,
     preferences.getSnapshot,
   )
+  const draft = useDraft(useInput)
   const enabled = snapshot.preferences.enabled
   useEffect(() => {
     if (!enabled) persistLayout(DOCKED_LAYOUT)
@@ -99,7 +117,7 @@ export function InputAnywhereControls({
   return <ActiveInputAnywhereControls
     preferences={snapshot.preferences}
     t={t}
-    draftActive={(input?.draft.trim().length ?? 0) > 0}
+    draftActive={draft.trim().length > 0}
   />
 }
 
@@ -710,7 +728,7 @@ function ActiveInputAnywhereControls({ preferences, t, draftActive }: {
         title={t('resetPosition')}
         onClick={reset}
       >
-        <IconRefreshOutline16 size={16} />
+        <IconRefreshOutlineRegular size={16} />
       </button>}
     </div>
     {layout.mode === 'floating' && targets !== null && createPortal(

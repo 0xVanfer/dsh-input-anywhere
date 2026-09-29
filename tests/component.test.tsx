@@ -2,14 +2,19 @@
 
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { InputAnywhereControls } from '../src/client/InputAnywhereControls.tsx'
+import { InputAnywhereControls, type InputDraftSelector } from '../src/client/InputAnywhereControls.tsx'
 import { DEFAULT_PREFERENCES, type InputAnywherePreferences } from '../src/preferences-contract.ts'
 import { zh } from '../src/client/locales.ts'
 import type { PreferenceSnapshot, PreferenceStore } from '../src/client/preferences.ts'
 
 vi.mock('@deepseek-ai/dsh-client-ui-primitives', () => ({
-  IconRefreshOutline16: () => null,
+  IconRefreshOutlineRegular: () => null,
 }))
+
+/** Session standard kit stand-in: the Slot supplies a stable selector over the input machine. */
+function draftSource(draft: string): InputDraftSelector {
+  return selector => selector({ draft })
+}
 
 const rectangles = new WeakMap<Element, DOMRect>()
 
@@ -246,7 +251,7 @@ describe('InputAnywhereControls integration', () => {
     fixture.card.style.setProperty('--dsw-alias-bg-layer-2', 'rgba(40, 50, 60, 0.4)')
     const store = new ComponentPreferenceStore()
     const view = render(
-      <InputAnywhereControls preferences={store} input={{ draft: '' }} />,
+      <InputAnywhereControls preferences={store} useInput={draftSource('')} />,
       { container: fixture.mount },
     )
     fireEvent.click(view.getByRole('button', { name: 'Move input' }))
@@ -254,11 +259,11 @@ describe('InputAnywhereControls integration', () => {
       .toBe('rgba(10, 20, 30, 0.3)')
     expect(fixture.seat.style.getPropertyValue('--dsh-input-anywhere-controls-opacity')).toBe('0.3')
 
-    view.rerender(<InputAnywhereControls preferences={store} input={{ draft: 'working' }} />)
+    view.rerender(<InputAnywhereControls preferences={store} useInput={draftSource('working')} />)
     expect(fixture.seat.style.getPropertyValue('--dsh-input-anywhere-surface'))
       .toBe('rgba(10, 20, 30, 0.92)')
 
-    view.rerender(<InputAnywhereControls preferences={store} input={{ draft: '' }} />)
+    view.rerender(<InputAnywhereControls preferences={store} useInput={draftSource('')} />)
     const editor = fixture.card.querySelector('textarea')
     if (editor === null) throw new Error('fixture textarea missing')
     fireEvent.focusIn(editor)
@@ -274,7 +279,7 @@ describe('InputAnywhereControls integration', () => {
     fixture.card.style.setProperty('--dsw-alias-bg-layer-2', 'rgba(40, 50, 60, 0.4)')
     const store = new ComponentPreferenceStore()
     const view = render(
-      <InputAnywhereControls preferences={store} input={{ draft: 'working' }} />,
+      <InputAnywhereControls preferences={store} useInput={draftSource('working')} />,
       { container: fixture.mount },
     )
     fireEvent.click(view.getByRole('button', { name: 'Move input' }))

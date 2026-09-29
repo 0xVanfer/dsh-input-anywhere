@@ -1,18 +1,21 @@
 import { defineConfig, type UserConfig } from 'tsdown'
 
 const PLUGIN_ID = 'dsh-input-anywhere'
+/**
+ * Module-table seed of the Web shell: the only platform singletons a Client
+ * bundle may require instead of bundling. Every other `@deepseek-ai/*` import
+ * either inlines or fails the purity gate below.
+ */
 const CLIENT_EXTERNALS = [
   'react',
   'react/jsx-runtime',
   'react-dom',
   'react-dom/client',
   '@deepseek-ai/cordis',
+  '@deepseek-ai/dsh-client-store',
   '@deepseek-ai/dsh-client-ui-slots',
-  '@deepseek-ai/dsh-client-web-react',
   '@deepseek-ai/dsh-client-ui-primitives',
-  '@deepseek-ai/dsh-client-ui-attachment',
-  '@deepseek-ai/dsh-client-schema-form',
-  '@deepseek-ai/dsh-client-runtime/client',
+  '@deepseek-ai/dsh-client-ui-dockkit',
 ] as const
 
 const INLINE_SAFE = /^@deepseek-ai\/dsh-(host-apiproxy|session|llm|tools|brand)(\/|$)/

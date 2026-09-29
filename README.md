@@ -7,7 +7,7 @@ Move and resize the native DeepSeek Harness Web composer without replacing its i
 
 [简体中文](README.zh-CN.md)
 
-> **Release status:** `v0.1.1` is the current release, tested against DeepSeek Harness `0.1.0-rc.6` and `0.1.0-rc.7`. The plugin relies on documented Slot contracts and a small set of currently stable composer DOM markers. Review the [compatibility contract](docs/compatibility.md) before using it with another DSH release or a replacement composer.
+> **Release status:** `v0.2.0` is the current release, tested against DeepSeek Harness `0.1.7-rc.2`. The plugin relies on documented Slot contracts and a small set of currently stable composer DOM markers. Review the [compatibility contract](docs/compatibility.md) before using it with another DSH release or a replacement composer.
 
 ## Overview
 
@@ -51,7 +51,7 @@ Theme inheritance lets the composer settle into customized DSH workspaces withou
 - Container-query rules that prevent permission, extension, model, and plugin controls from overlapping.
 - A dedicated DSH settings section with a live master switch, independent input-surface and control opacity modes, reset, and English/Chinese labels.
 - Exact theme-alpha inheritance while idle, plus separately configurable idle/input-active behavior only when the floating seat intersects the current `[data-chat-flow]`.
-- Host-backed user settings with a writable browser fallback that migrates when the Host namespace becomes available.
+- Durable preferences stored as ordinary DSH Host configuration, so they follow the profile and every browser that opens it.
 - Versioned layout `localStorage` persistence with validation, page-hide flushing, and re-clamping.
 - Forty-four-pixel controls on coarse-pointer devices.
 - Scoped cleanup of classes, attributes, inline properties, observers, listeners, pointer capture, timers, and animation frames.
@@ -61,15 +61,15 @@ Theme inheritance lets the composer settle into customized DSH workspaces withou
 
 | Component | Status |
 | --- | --- |
-| DeepSeek Harness `0.1.0-rc.6` and `0.1.0-rc.7` | Verified |
-| Cordis `4.0.1` | Verified |
+| DeepSeek Harness `0.1.7-rc.2` | Verified |
+| Cordis `4.0.4` | Verified |
 | React / React DOM 18 | Verified through the DSH Web profile |
 | Chromium, fine pointer | Automated Playwright coverage |
 | Chromium, coarse pointer emulation | Automated Playwright coverage |
 | Firefox and WebKit | Not yet claimed |
 | Replacement composer implementations | Conditional; see below |
 
-The package peer range allows compatible DSH releases below `0.2.0`, but that range is not a claim that every release has been tested. See [docs/compatibility.md](docs/compatibility.md) for the exact Slot, marker, browser, and extension contract.
+The package peer range allows compatible DSH releases at or above `0.1.7-rc.2` and below `0.2.0`, but that range is not a claim that every release has been tested. See [docs/compatibility.md](docs/compatibility.md) for the exact Slot, marker, browser, and extension contract.
 
 ## Installation
 
@@ -79,7 +79,7 @@ The package peer range allows compatible DSH releases below `0.2.0`, but that ra
 dsh plugin --profile web add dsh-input-anywhere
 ```
 
-The registry package resolves the published `0.1.1` release. Restart the Web profile after adding or removing the package so DSH reloads its manifest and Client roster.
+The registry package resolves the published `0.2.0` release. Restart the Web profile after adding or removing the package so DSH reloads its manifest and Client roster.
 
 Remove the package with:
 
@@ -124,7 +124,7 @@ Turning the feature switch off performs the same native-dock restore as the tool
 
 ## Persistence and Privacy
 
-Layout geometry is stored locally under `dsh-input-anywhere:layout:v1`. Appearance and enablement preferences use the Host `dsh-input-anywhere` user-settings namespace. Every edit first enters a browser write-ahead journal under `dsh-input-anywhere:preferences:v1`; confirmed Host fields are removed individually, while rejected, conflicted, partially completed, or interrupted operations remain for retry. Only changed fields are replayed, so untouched Host settings are preserved. If browser storage is blocked, settings remain writable for the current page and the settings section reports that limitation.
+Layout geometry is stored locally under `dsh-input-anywhere:layout:v1`, because it describes one browser window. Appearance and enablement preferences are Host configuration: the plugin row's `config` in the active profile's `cordis.patch.yml`, keyed by the `dsh-input-anywhere` settings namespace. Only fields you change are written, so untouched values keep their inherited defaults, and **Restore defaults** clears the plugin's own overrides in one mutation. A page that cannot reach the Host settings document reports a read-only form instead of diverging locally.
 
 These records contain only layout geometry and the settings shown above. They do not contain prompts, messages, workspace paths, model names, or account data. The plugin performs no direct network requests; Host settings use the normal DSH settings transport.
 
@@ -155,9 +155,9 @@ This project does not currently claim WCAG conformance or completed screen-reade
 
 ## Troubleshooting
 
-### Settings are using browser fallback
+### The settings page reports that the Host serves no section
 
-A Client-only HMR update cannot register the new Host settings namespace. The page remains writable through the local fallback, but restart the Web profile after rebuilding or installing this Host change so the values migrate into the DSH user-settings document.
+The settings form is keyed by the profile entry id. Confirm the installed bundle inserts its row as `id: dsh-input-anywhere`; a renamed row needs the Client namespace updated to match. A page served over a non-loopback origin reports a read-only form by design, because DSH keeps such sessions process-local.
 
 ### The control is not visible
 
@@ -201,9 +201,9 @@ PLAYWRIGHT_CHROMIUM_EXECUTABLE=/path/to/chromium pnpm test:browser
 
 `pnpm check:quick` runs type checks, unit/component tests, and the production build without launching a browser. `pnpm check` is the release gate and also runs Playwright.
 
-The browser artifact is `lib/client.js`, a DSH lazy-CJS package registered through `window.__ModuleLoader__`. The Host half registers the durable `dsh-input-anywhere` settings schema when the optional DSH settings service is available.
+The browser artifact is `lib/client.js`, a DSH lazy-CJS package registered through `window.__ModuleLoader__`. The Host half exports the live `dsh-input-anywhere` `Config` schema — every field marked `volatile()` — and claims its own settings page so DSH does not generate a second one.
 
-For development HMR, run `pnpm watch` in this repository while a DSH Web process with the Client HMR receiver is active. Installing the package into a profile still requires a process restart because manifest discovery is a startup operation.
+For development HMR, run `pnpm watch` in this repository while a DSH Web process with the Client HMR receiver is active. Adding this bundle to a live profile activates both halves without a restart; replacing already-installed JavaScript with a new build needs a restart so DSH loads a fresh module generation.
 
 ## Project Documentation
 

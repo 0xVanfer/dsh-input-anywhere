@@ -1,7 +1,8 @@
 /** Browser half: enhance the native composer and expose a dedicated settings section. */
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
+import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import { SETTINGS_NAMESPACE, type InputAnywherePreferences } from '../preferences-contract.ts'
 import { InputAnywhereControls } from './InputAnywhereControls.tsx'
@@ -10,7 +11,9 @@ import { en, LOCALE_NAMESPACE, zh } from './locales.ts'
 import { PreferenceController } from './preferences.ts'
 import { pluginStyles } from './styles.ts'
 
-export const inject = ['slots', 'locale', 'connection', 'remote', 'settingsScope']
+// `configForms` carries both the reads and the writes, so the settings
+// transport itself is not a dependency of this plugin.
+export const inject = ['slots', 'locale', 'configForms']
 
 function installStyles(): () => void {
   const tag = document.createElement('style')
@@ -26,9 +29,9 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(() => ctx.locale.register(LOCALE_NAMESPACE, { zh, en }), 'input-anywhere: dictionaries')
 
   const t = ctx.locale.bind(LOCALE_NAMESPACE)
-  const scope = ctx.settingsScope.bind<InputAnywherePreferences>({ namespace: SETTINGS_NAMESPACE })
-  const preferences = new PreferenceController(scope)
-  ctx.effect(() => () => { preferences.dispose() }, 'input-anywhere: preference fallback')
+  const form = ctx.configForms.get<InputAnywherePreferences>(SETTINGS_NAMESPACE)
+  const preferences = new PreferenceController(form)
+  ctx.effect(() => () => { preferences.dispose() }, 'input-anywhere: preference subscription')
 
   ctx.slots.inject('settings.section', () => ctx.slots.register(
     {

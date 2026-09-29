@@ -2,23 +2,32 @@
 
 ## Tested baseline
 
-The published `0.1.1` release is tested against:
+The published `0.2.0` release is tested against:
 
 | Dependency | Tested version |
 | --- | --- |
-| DeepSeek Harness | `0.1.0-rc.6`, `0.1.0-rc.7` |
-| Cordis | `4.0.1` |
+| DeepSeek Harness | `0.1.7-rc.2` |
+| Cordis | `4.0.4` |
 | React / React DOM | `18.x` through DSH Web |
-| Node.js build environment | `22.19` and newer Node 22 releases |
+| Node.js build environment | `22.19` and newer Node releases |
 | Browser automation | Chromium through Playwright `1.62` |
 
-Peer ranges below `0.2.0` express expected API compatibility, not proof that every intermediate DSH release was tested.
+Peer ranges below `0.2.0` express expected API compatibility, not proof that every intermediate DSH release was tested. Harness `0.1.0-rc.6` and `0.1.0-rc.7` are **not** supported by `0.2.0`: the Client context, settings scope, and product icon names those releases shipped were replaced.
 
 ## Required Slot contract
 
 The Client registers list items in `conversation.input.left` and root-scoped `settings.section`, both with `id: input-anywhere`. The input Slot must remain additive and session scoped; its contribution must render inside the native composer card and seat. The settings Slot must retain the documented root list registration with label and order support.
 
-The Client also requires the `slots`, `locale`, `settingsScope`, `connection`, and `remote` services declared in its Cordis `inject`. The Host settings service remains optional: without it, settings stay writable through the browser fallback until the `dsh-input-anywhere` namespace can be registered. Replacing the full composer is outside the plugin's ownership.
+The Client declares the `slots`, `locale`, and `configForms` services in its Cordis `inject`; the settings transport itself is reached through `configForms`, so `connection` and `remote` are not direct dependencies. The input Slot must supply the session standard kit `useInput` selector, which the control reads for its current draft. Replacing the full composer is outside the plugin's ownership.
+
+## Required Host contract
+
+The settings namespace is the profile entry id, not a name the plugin registers for itself. The package therefore inserts its row as `id: dsh-input-anywhere` — its own package name — and the Client binds that namespace through `ctx.configForms.get('dsh-input-anywhere')`. A deployment that renames the row must also patch the Client, or the settings page reports that the Host serves no section for the namespace.
+
+The Host `Config` export must be a schemastery object whose preference fields are each marked `volatile()`. The settings service projects only volatile fields into an editable form and refuses writes to a field with no volatile ancestor, so a non-volatile schema still loads but cannot be edited from the settings page.
+
+Durability lives in the profile patch layer: edits are merged into the plugin row's `config` in the active profile's `cordis.patch.yml`. A page whose persistence mode is `memory` (a non-loopback browser) reports a read-only form instead of keeping divergent browser-local values.
+
 
 ## Required DOM markers
 
@@ -100,7 +109,7 @@ Required:
 - CSS custom properties;
 - React portals.
 
-Visual Viewport support is optional. Without it, `window.innerWidth` and `window.innerHeight` are used. `localStorage` is optional for interaction but required for layout and pending-setting persistence across page loads; when it is denied, the settings section identifies the page-only memory mode.
+Visual Viewport support is optional. Without it, `window.innerWidth` and `window.innerHeight` are used. `localStorage` carries only the versioned layout record; preferences ride the DSH settings document, and a page that cannot reach it reports a read-only form.
 
 ## Reporting compatibility failures
 

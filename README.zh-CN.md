@@ -4,7 +4,7 @@
 
 [English](README.md)
 
-> **发布状态：** 当前版本为 `v0.1.1`，已通过 DeepSeek Harness `0.1.0-rc.6` 和 `0.1.0-rc.7` 验证。插件同时依赖 Slot 契约和少量当前稳定的 composer DOM marker。用于其他 DSH 版本或替换 composer 前，请阅读[兼容性契约](docs/compatibility.md)。
+> **发布状态：** 当前版本为 `v0.2.0`，已通过 DeepSeek Harness `0.1.7-rc.2` 验证。插件同时依赖 Slot 契约和少量当前稳定的 composer DOM marker。用于其他 DSH 版本或替换 composer 前，请阅读[兼容性契约](docs/compatibility.md)。
 
 ## 工作方式
 
@@ -48,7 +48,7 @@
 - 根据 composer 容器宽度避免权限、扩展菜单、模型和插件控件重叠。
 - 独立的 DSH 设置页面，包含实时总开关、输入表面与控件透明度模式、恢复默认值以及中英文标签。
 - 空闲时精确跟随 DSH 主题 alpha；只有浮动 seat 与当前 `[data-chat-flow]` 相交时，才应用分别配置的空闲/输入态策略。
-- 使用 Host 用户设置；Host namespace 暂不可用时保持浏览器本地可写，并在恢复后自动迁移。
+- 设置作为 DSH Host 配置持久保存，跟随 profile，对打开它的所有浏览器一致生效。
 - 布局使用版本化 `localStorage`，在交互完成、页面隐藏和卸载时刷新最新值。
 - 粗指针设备使用 44 px 目标尺寸。
 - 浮动时释放原生 trajectory 的 composer 底部占位，复位后恢复。
@@ -58,15 +58,15 @@
 
 | 组件 | 状态 |
 | --- | --- |
-| DeepSeek Harness `0.1.0-rc.6` 和 `0.1.0-rc.7` | 已验证 |
-| Cordis `4.0.1` | 已验证 |
+| DeepSeek Harness `0.1.7-rc.2` | 已验证 |
+| Cordis `4.0.4` | 已验证 |
 | React / React DOM 18 | 已通过 DSH Web profile 验证 |
 | Chromium 细指针 | Playwright 自动化覆盖 |
 | Chromium 粗指针模拟 | Playwright 自动化覆盖 |
 | Firefox / WebKit | 暂不声明支持 |
 | 替换 composer | 有条件兼容 |
 
-Peer dependency 允许 `<0.2.0` 的兼容 DSH 版本，但这不表示所有版本均已测试。完整条件见 [docs/compatibility.md](docs/compatibility.md)。
+Peer dependency 允许 `>=0.1.7-rc.2` 且 `<0.2.0` 的兼容 DSH 版本，但这不表示所有版本均已测试。完整条件见 [docs/compatibility.md](docs/compatibility.md)。
 
 ## 安装
 
@@ -76,7 +76,7 @@ Peer dependency 允许 `<0.2.0` 的兼容 DSH 版本，但这不表示所有版�
 dsh plugin --profile web add dsh-input-anywhere
 ```
 
-registry 包会安装已发布的 `0.1.1`。添加或删除插件后需要重启 Web profile，让 DSH 重新读取 manifest 和 Client 插件名册。
+registry 包会安装已发布的 `0.2.0`。
 
 本地仓库：
 
@@ -119,7 +119,7 @@ dsh plugin --profile web remove dsh-input-anywhere
 
 ## 持久化与隐私
 
-布局保存于浏览器的 `dsh-input-anywhere:layout:v1`。启用状态和外观设置使用 Host 的 `dsh-input-anywhere` 用户设置 namespace。每次修改都会先进入 `dsh-input-anywhere:preferences:v1` 写前日志；经 Host snapshot 确认的字段会逐项删除，拒绝、冲突、部分完成或卸载中断的操作则保留等待重试。迁移只重放实际修改的字段，不会覆盖其他 Host 设置。浏览器存储被策略阻止时，设置仍可在当前页面使用，设置页会明确提示无法跨页面保留。
+布局保存于浏览器的 `dsh-input-anywhere:layout:v1`，因为它只描述某一个浏览器窗口。启用状态和外观设置属于 Host 配置：写入当前 profile `cordis.patch.yml` 中插件行的 `config`，namespace 为 `dsh-input-anywhere`。只有被修改的字段会写入，未触碰的值继续继承默认值；**恢复默认设置** 会在一次原子操作中清除本插件自己的覆盖。无法访问 Host 设置文档的页面会显示只读设置页，而不会在本地产生分歧。
 
 这些记录只包含布局几何和上表所列设置，不包含提示词、消息、工作区路径、模型名称或账户数据。插件不直接发起网络请求；Host 设置使用 DSH 正常设置传输。
 
@@ -150,9 +150,9 @@ dsh plugin --profile web remove dsh-input-anywhere
 
 ## 故障排查
 
-### 设置正在使用浏览器回退
+### 设置页提示 Host 未提供该设置项
 
-仅热更新 Client 无法注册新的 Host 设置 namespace。页面仍可通过本地回退写入；重新构建或安装 Host 改动后重启 Web profile，值会自动迁移到 DSH 用户设置文档。
+设置表单以 profile entry id 作为键。请确认已安装的 bundle 插入的行是 `id: dsh-input-anywhere`；若重命名了该行，需要同步修改 Client 绑定的 namespace。通过非 loopback 地址打开的页面按设计显示只读表单，因为 DSH 让这类会话只在进程内有效。
 
 ## 开发与验证
 
@@ -176,7 +176,7 @@ PLAYWRIGHT_CHROMIUM_EXECUTABLE=/path/to/chromium pnpm test:browser
 
 `pnpm check:quick` 不启动浏览器；`pnpm check` 是完整发布门禁。
 
-开发 HMR 需要当前仓库的 `pnpm watch` 和一个已启用 Client HMR receiver 的 DSH Web 进程。profile 中首次安装仍需重启。
+开发 HMR 需要当前仓库的 `pnpm watch` 和一个已启用 Client HMR receiver 的 DSH Web 进程。把本 bundle 加入运行中的 profile 会直接激活两半，无需重启；但用新构建替换已安装的 JavaScript 需要重启，以便 DSH 加载新的模块代际。
 
 ## 文档
 

@@ -1,5 +1,9 @@
 # Install the package as a Host row so dsh-client-modules discovers its
 # dsh.client manifest and adds the browser half to the Web plugin roster.
+#
+# The row id is also the settings namespace: the Host keys preference forms by
+# profile entry id, and the browser half binds `dsh-input-anywhere` through
+# `ctx.configForms`. Keep the two in step.
 - insert:
-    - id: input-anywhere
+    - id: dsh-input-anywhere
       name: dsh-input-anywhere

@@ -1,5 +1,5 @@
-import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
-import { Button, IconRefreshOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { useState, useSyncExternalStore, type ReactNode } from 'react'
+import { Button, IconRefreshOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
   AdaptiveOpacityMode,
   ControlOpacityMode,
@@ -95,12 +95,11 @@ function OpacitySlider({ label, value, disabled, onChange }: {
 export function InputAnywhereSettings({ preferences: store, t }: InputAnywhereSettingsProps): ReactNode {
   const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot)
   const [saveError, setSaveError] = useState(false)
-  useEffect(() => {
-    if (snapshot.persistence === 'host') setSaveError(false)
-  }, [snapshot.persistence])
   const values = snapshot.preferences
   const disabled = !snapshot.writable
 
+  // The banner belongs to the last attempt: a new write clears it, and a
+  // rejected one raises it again.
   const set = <K extends keyof InputAnywherePreferences>(
     field: K,
     value: InputAnywherePreferences[K],
@@ -131,7 +130,7 @@ export function InputAnywhereSettings({ preferences: store, t }: InputAnywhereSe
         type="button"
         variant="outline"
         size="sm"
-        icon={<IconRefreshOutline16 />}
+        icon={<IconRefreshOutlineRegular />}
         disabled={disabled}
         onClick={() => {
           setSaveError(false)
@@ -226,8 +225,11 @@ export function InputAnywhereSettings({ preferences: store, t }: InputAnywhereSe
     </fieldset>
 
     {snapshot.status === 'loading' && <p className="dsh-input-anywhere-settings-status">{t('loading')}</p>}
-    {snapshot.status === 'local' && snapshot.persistence === 'memory'
-      && <p className="dsh-input-anywhere-settings-status">{t('memoryOnly')}</p>}
+    {snapshot.status === 'unavailable' && <p className="dsh-input-anywhere-settings-status">
+      {snapshot.persistence === 'memory' ? t('memoryOnly') : t('unavailable')}
+    </p>}
+    {snapshot.status === 'ready' && !snapshot.writable
+      && <p className="dsh-input-anywhere-settings-status">{t('readOnly')}</p>}
     {saveError && <p className="dsh-input-anywhere-settings-status" role="alert">{t('saveError')}</p>}
   </div>
 }

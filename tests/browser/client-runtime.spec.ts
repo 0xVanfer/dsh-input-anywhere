@@ -117,7 +117,7 @@ async function mountPackedClient(page: import('@playwright/test').Page): Promise
           icon as React.ReactNode,
           children as React.ReactNode,
         ),
-        IconRefreshOutline16: () => React.createElement('span', { 'data-test-icon': 'refresh' }),
+        IconRefreshOutlineRegular: () => React.createElement('span', { 'data-test-icon': 'refresh' }),
       },
     }
     const client = registration.factory((name) => {
@@ -151,13 +151,14 @@ async function mountPackedClient(page: import('@playwright/test').Page): Promise
           })[key] ?? key
         },
       },
-      settingsScope: {
-        bind() {
+      configForms: {
+        get() {
           return {
             getSnapshot: () => settingsSnapshot,
             subscribe: () => () => {},
-            set: async () => {},
-            unset: async () => {},
+            set: async () => true,
+            unset: async () => true,
+            mutate: async () => true,
           }
         },
       },
@@ -173,7 +174,8 @@ async function mountPackedClient(page: import('@playwright/test').Page): Promise
           if (options.name !== 'conversation.input.left') return () => {}
           root.render(React.createElement(Component, {
             ...options.inject?.(),
-            input: { draft: '' },
+            useInput: <Selected,>(selector: (state: { readonly draft: string }) => Selected): Selected =>
+              selector({ draft: '' }),
           }))
           return () => { root.unmount() }
         },

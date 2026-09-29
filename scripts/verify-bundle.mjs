@@ -18,25 +18,51 @@ function check(label, condition) {
 }
 
 check('host exports package name', host.name === 'dsh-input-anywhere')
+check('host exports a Config schema', typeof host.Config?.toJSON === 'function')
+
+// `toJSON()` is a ref envelope: the root and every field is either an inline
+// node or an integer reference into `refs`.
+function nodeOf(envelope, value) {
+  return typeof value === 'object' && value !== null
+    ? value
+    : envelope.refs?.[String(value)]
+}
+
+// Every preference field must be volatile, otherwise the settings service
+// refuses the Client's writes and projects no editable form at all.
+const configJson = host.Config.toJSON()
+const configRoot = nodeOf(configJson, configJson.uid)
+const configFields = Object.entries(configRoot?.dict ?? {})
+check('the Config form exposes every live preference field', configFields.length === 10)
+check('every Config field is live-writable', configFields.every(([, ref]) => {
+  const node = nodeOf(configJson, ref)
+  return node?.meta?.volatile === true && node?.meta?.default !== undefined
+}))
+
 let hostInject
-let registeredNamespace
-let registeredSchema
+let configuredPage
+const hostFiber = { uid: 'dsh-input-anywhere' }
 host.apply({
+  fiber: hostFiber,
   inject(dependencies, callback) {
     hostInject = dependencies
     callback({
+      effect(effect) {
+        const dispose = effect()
+        if (typeof dispose === 'function') dispose()
+      },
       settings: {
-        register(namespace, schema) {
-          registeredNamespace = namespace
-          registeredSchema = schema
+        configure(presentation, owner) {
+          configuredPage = { presentation, owner }
+          return () => {}
         },
       },
     })
   },
 })
 check('host waits for the optional settings service', JSON.stringify(hostInject) === JSON.stringify(['settings']))
-check('host registers its durable settings namespace', registeredNamespace === 'dsh-input-anywhere'
-  && registeredSchema === host.InputAnywherePreferencesSchema)
+check('host suppresses the schema-generated settings page', configuredPage?.presentation?.auto === false
+  && configuredPage?.owner === hostFiber)
 
 let registration
 const styleTags = []
@@ -81,17 +107,15 @@ const externalNames = []
 const client = registration.factory((name) => {
   externalNames.push(name)
   if (name === '@deepseek-ai/dsh-client-ui-primitives') {
-    return { IconRefreshOutline16: () => null }
+    return { Button: () => null, IconRefreshOutlineRegular: () => null }
   }
   return nativeRequire(name)
 })
 check('client factory returns apply', typeof client.apply === 'function')
-check('client declares settings, locale, transport, and slots services', JSON.stringify(client.inject) === JSON.stringify([
+check('client declares slots, locale, and the settings form service', JSON.stringify(client.inject) === JSON.stringify([
   'slots',
   'locale',
-  'connection',
-  'remote',
-  'settingsScope',
+  'configForms',
 ]))
 check('client external set is deliberate', JSON.stringify(externalNames.sort()) === JSON.stringify([
   '@deepseek-ai/dsh-client-ui-primitives',
@@ -130,14 +154,15 @@ const fakeContext = {
       return key => key
     },
   },
-  settingsScope: {
-    bind({ namespace }) {
+  configForms: {
+    get(namespace) {
       boundSettingsNamespace = namespace
       return {
         getSnapshot: () => settingsSnapshot,
         subscribe: () => () => {},
-        set: async () => {},
-        unset: async () => {},
+        set: async () => true,
+        unset: async () => true,
+        mutate: async () => true,
       }
     },
   },
@@ -159,7 +184,7 @@ check('client installs exactly one labeled stylesheet', styleTags.length === 1
   && styleTags[0]?.dataset.plugin === 'dsh-input-anywhere'
   && styleTags[0]?.dataset.pluginCss === 'dsh-input-anywhere/client'
   && styleTags[0]?.textContent.includes('.dsh-input-anywhere-seat'))
-check('client registers its locale and binds the durable namespace', registeredLocale === 'input-anywhere'
+check('client registers its locale and binds the config-form namespace', registeredLocale === 'input-anywhere'
   && boundSettingsNamespace === 'dsh-input-anywhere')
 check('client waits for settings and additive input slots', JSON.stringify(injectedSlots) === JSON.stringify([
   'settings.section',
